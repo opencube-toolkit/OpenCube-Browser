@@ -11,14 +11,12 @@ the URI of the cube to be browsed and the the URI of the remote SPARQL end-point
 
 Widget configuration for use with the native triple store:
 
-<source>
-
+```
 {{#widget: org.certh.opencube.cubebrowser.DataCubeBrowser|
    dataCubeURI= '<http://eurostat.linked-statistics.org/data/cens_hnctz>'|
    asynch='true'
 }}
-
-</source>     
+```    
 
 ###Functionality
 
