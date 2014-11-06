@@ -10,13 +10,24 @@ or at remote SPARQL end-points. The browser can be initialized by creating a wid
 the URI of the cube to be browsed and the the URI of the remote SPARQL end-point (if needed).
 
 Widget configuration for use with the native triple store:
-
 ```
 {{#widget: org.certh.opencube.cubebrowser.DataCubeBrowser|
    dataCubeURI= '<http://eurostat.linked-statistics.org/data/cens_hnctz>'|
    asynch='true'
 }}
 ```    
+Widget configuration for use with the remote SPARQL end-point containing data for the 2011 Irish Census:
+```
+{{#widget: org.certh.opencube.cubebrowser.DataCubeBrowser|
+   dataCubeURI= '<http://eurostat.linked-statistics.org/data/cens_hnctz>'|
+   asynch='true'
+}}
+``` 
+
+ 
+
+{{#widget: DataCubeBrowser| dataCubeURI=<http://data.cso.ie/census-2011/dataset/families-by-children-age-and-type-of-family/lt> |asynch='true' 
+||sparqlService='<http://data.cso.ie/sparql>'}}
 
 ###Functionality
 
