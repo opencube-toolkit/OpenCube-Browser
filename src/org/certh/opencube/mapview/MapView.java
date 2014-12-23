@@ -318,7 +318,7 @@ public class MapView extends AbstractWidget<MapView.Config> {
 
 				// Get the geospatial dimension of the cube
 				geodimension = CubeSPARQL.getGeoDimension(cubeSliceURI,
-						cubeGraph, cubeDSDGraph, selectedLanguage, SPARQL_service);
+						cubeGraph, cubeDSDGraph, selectedLanguage,defaultLang,ignoreLang, SPARQL_service);
 
 				if (geodimension != null) {
 
@@ -337,7 +337,7 @@ public class MapView extends AbstractWidget<MapView.Config> {
 					// belongs
 					aggregationSetDims = AggregationSPARQL
 							.getAggegationSetDimsFromCube(cubeSliceURI,
-									cubeDSDGraph, selectedLanguage,ignoreLang,SPARQL_service);
+									cubeDSDGraph, selectedLanguage,defaultLang,ignoreLang,SPARQL_service);
 
 					// Get all the dimensions per cube of the aggregations set
 					cubeDimsOfAggregationSet = AggregationSPARQL
@@ -347,7 +347,7 @@ public class MapView extends AbstractWidget<MapView.Config> {
 					// Get the attributes of the cube
 					cubeAttributes = CubeSPARQL.getDataCubeAttributes(
 							cubeSliceURI, cubeGraph, cubeDSDGraph,selectedLanguage,
-							SPARQL_service);
+							defaultLang,ignoreLang,	SPARQL_service);
 
 					// Get values for each cube dimension
 					allDimensionsValues = CubeHandlingUtils.getDimsValues(cubeDimensions,
@@ -792,7 +792,6 @@ public class MapView extends AbstractWidget<MapView.Config> {
 		visualizations.add(0, "Visualization type");
 		visualizations.add(1, "Markers map");
 		visualizations.add(2, "Bubble map");
-	//	visualizations.add(3, "Heat map");
 		visualizations.add(3, "Choropleth map");
 
 		// Create the FComboBox with the supported types of visualizations.
@@ -887,8 +886,8 @@ public class MapView extends AbstractWidget<MapView.Config> {
 		
 		// Get all the attribute labels to show in markers
 		for (LDResource attres :cubeAttributes) {
-			if (attres.getLabel() != null)
-				attr_labels += "'" + attres.getLabel().replaceAll("'","\'")+ "',";
+			if (attres.getURIorLabel() != null)
+				attr_labels += "'" + attres.getURIorLabel().replaceAll("'","\'")+ "',";
 			else
 				attr_labels += "' '";
 		}
@@ -947,8 +946,8 @@ public class MapView extends AbstractWidget<MapView.Config> {
 		// dynamically gather selected values from each dimension combobox
 		// dynamically create strings with the selected values for input in the map's bubbles
 		for (LDResource fDim :fixedDimensionsSelectedValues.keySet()) {
-			if (fDim.getLabel() != null)
-				temp += "<b>" + fDim.getLabel()	+ ":</b>";
+			if (fDim.getURIorLabel() != null)
+				temp += "<b>" + fDim.getURIorLabel()	+ ":</b>";
 			else
 				temp += "";
 			temp += fixedDimensionsSelectedValues.get(fDim).getURIorLabel()	+ "<br />";
@@ -1025,19 +1024,9 @@ public class MapView extends AbstractWidget<MapView.Config> {
 				
 		// If this is not the first load of the widget
 		if (!isFirstLoad) {
-			cnt.populateView();
-			
-			//cnt.initializeView();
+			cnt.populateView();				
 		}
-		
-		
-			
-		}
-		
-		
-		
-	
-
+	}
 	@Override
 	public String getTitle() {
 		return "Data Cube Map View widget";
@@ -1112,9 +1101,9 @@ public class MapView extends AbstractWidget<MapView.Config> {
 			List<String> attributeValues, int cubeAttributesSize,
 			String geo_label, String attr_labels, int iterations) {
 		String markermap = null;
-	 int nofiterations = iterations/100;
+		//int nofiterations = iterations/100;
 	 
-	    String input = geovalue;
+	//    String input = geovalue;
 	
 
 		System.out.println("mpla:" + attr_labels);
@@ -1161,15 +1150,8 @@ public class MapView extends AbstractWidget<MapView.Config> {
 		markermap +="var  o = 0;";
 		markermap +="news =[];";
 		markermap +="for (k=0,j=geova.length; k<j; k+=chunk) {";
-		//markermap +="setTimeout(function(x) { return function() { ";
-		//markermap +="for (k=0,j=geova.length; 98<j-k; k+=chunk) {";
-				
-		//markermap+="temparray = \"\";";
-	markermap +="temparray = geova.slice(k,k+chunk); ";
-	markermap +="tempmeasure = measure.slice(k,k+chunk); ";
-		//markermap +="var m = k;";
-		//markermap +="";
-	//	markermap +="alert(temparray);";
+		markermap +="temparray = geova.slice(k,k+chunk); ";
+		markermap +="tempmeasure = measure.slice(k,k+chunk); ";
 		markermap +="";
 		markermap +="var temp = temparray;";
 		

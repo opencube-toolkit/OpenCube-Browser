@@ -13,8 +13,8 @@ import org.openrdf.query.TupleQueryResult;
 
 public class CubeSPARQL {
 	
-	private static boolean globalDSD = false;
-	private static boolean notime = false;
+	//private static boolean globalDSD = false;
+	//private static boolean notime = false;
 	
 		// Get all the dimensions of a data cube
 		// Input: The cubeURI, cubeGraph, SPARQL service
@@ -52,9 +52,8 @@ public class CubeSPARQL {
 			
 			getCubeDimensions_query += "?dsd qb:component  ?cs."
 					+ "?cs qb:dimension ?dim." +
-					"OPTIONAL{?dim qb:concept ?cons.?cons skos:prefLabel ?label.}" +
-					"OPTIONAL{?dim qb:concept ?cons.?cons rdfs:label ?label.}}";
-			
+					"OPTIONAL{?dim qb:concept ?cons.?cons skos:prefLabel|rdfs:label ?label.}}"; 
+						
 			// If cube DSD graph is defined
 			if (cubeDSDGraph != null) {
 				getCubeDimensions_query += "}";
@@ -80,7 +79,7 @@ public class CubeSPARQL {
 						ldr.setLabelLiteral((Literal)bindingSet.getValue("label"));							
 					}
 					
-					//Add the first instance of teh dimension (regardless of the language)
+					//Add the first instance of the dimension (regardless of the language)
 					if(!cubeDimensions.contains(ldr)){
 						cubeDimensions.add(ldr);
 					}else{
@@ -154,9 +153,8 @@ public class CubeSPARQL {
 
 			getCubeMeasure_query += "?dsd qb:component  ?cs."
 					+ "?cs qb:measure  ?dim."+
-					"OPTIONAL{?dim qb:concept ?cons.?cons skos:prefLabel ?label.}" +
-					"OPTIONAL{?dim qb:concept ?cons.?cons rdfs:label ?label.}}";
-							
+					"OPTIONAL{?dim qb:concept ?cons.?cons skos:prefLabel|rdfs:label ?label.}}";
+						
 			// If a cube DSD graph is defined
 			if (cubeDSDGraph != null) {
 				getCubeMeasure_query += "}";
@@ -248,12 +246,8 @@ public class CubeSPARQL {
 			if (cubeDSDGraph != null) {
 				getDimensionValues_query += "GRAPH <" + cubeDSDGraph + "> {";
 			}
-		//	getDimensionValues_query += "?value rdf:type ?x." +
-		//			"OPTIONAL{?value skos:prefLabel ?label}" +
-		//			"OPTIONAL{?value rdfs:label ?label}}}";
-			
-			//FASTER THAN USING BORTH SKOS AND RDFS LABEL
-			getDimensionValues_query += "?value skos:prefLabel ?label}}";
+		
+			getDimensionValues_query += "?value skos:prefLabel|rdfs:label ?label}}";
 			
 			// If a cube DSD graph is defined
 			if (cubeDSDGraph != null) {
@@ -345,7 +339,7 @@ public class CubeSPARQL {
 					+ "PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>"
 					+ "PREFIX skos: <http://www.w3.org/2004/02/skos/core#>"
 					//+ "PREFIX skos: <http://www.w3.org/2004/02/skos#>"
-					+ "select  ?value ?label ?skoslabel where {";
+					+ "select  ?value ?label where {";
 
 			if (SPARQLservice != null) {
 				getDimensionValues_query += "SERVICE " + SPARQLservice + " {";
@@ -358,8 +352,7 @@ public class CubeSPARQL {
 
 			getDimensionValues_query += "<"	+ dimensionURI+ "> qb:codeList ?cd."
 					+ "?cd skos:hasTopConcept ?value." +
-					"OPTIONAL{?value skos:prefLabel ?label}" +
-					"OPTIONAL{?value rdfs:label ?label.}}";
+					"OPTIONAL{?value skos:prefLabel|rdfs:label ?label}}";
 					
 			// If a cube DSD graph is defined
 			if (cubeDSDGraph != null) {
@@ -489,17 +482,7 @@ public class CubeSPARQL {
 			String graphURI = null;
 			try {
 				while (res.hasNext()) {
-					String tmpgraphURI = res.next().getValue("graph_uri")
-							.toString();
-					if (globalDSD && tmpgraphURI.contains("globaldsd")) {
-						graphURI = tmpgraphURI;
-					} else if (!globalDSD && !tmpgraphURI.contains("globaldsd")) {
-						if (notime && tmpgraphURI.contains("notime")) {
-							graphURI = tmpgraphURI;
-						} else if (!notime && !tmpgraphURI.contains("notime")) {
-							graphURI = tmpgraphURI;
-						}
-					}
+					graphURI = res.next().getValue("graph_uri").toString();
 				}
 			} catch (QueryEvaluationException e) {
 				e.printStackTrace();
@@ -586,8 +569,8 @@ public class CubeSPARQL {
 		
 		
 		public static List<LDResource> getDataCubeAttributes(String dataCubeURI,
-				String cubeGraph, String cubeDSDGraph, String lang,
-				String SPARQLservice) { // Areti
+				String cubeGraph, String cubeDSDGraph, String lang,String defaultlang,
+				boolean ignoreLang,	String SPARQLservice) { // Areti
 
 			String getCubeAttributes_query = "PREFIX property: <http://eurostat.linked-statistics.org/property#> "
 					+ "PREFIX  qb: <http://purl.org/linked-data/cube#>  "
@@ -620,8 +603,7 @@ public class CubeSPARQL {
 			getCubeAttributes_query += "?dsd qb:component ?comp. "
 					+ "?comp qb:attribute ?attribute. "
 					+ "OPTIONAL {?attribute qb:concept ?concept. "
-					+ "?concept skos:prefLabel ?label."
-					+ "FILTER(LANGMATCHES(LANG(?label), \""+lang+"\")) }}";
+					+ "?concept skos:prefLabel|rdfs:label ?label.}}";
 
 			// If cube DSD graph is defined
 			if (cubeDSDGraph != null) {
@@ -638,14 +620,42 @@ public class CubeSPARQL {
 
 			try {
 				while (res.hasNext()) {
+					
 					BindingSet bindingSet = res.next();
-					LDResource ldr = new LDResource(bindingSet
-							.getValue("attribute").stringValue());
+					LDResource ldr = new LDResource(bindingSet.getValue("attribute").stringValue());
 
+					// check if there is a label (rdfs:label or skos:prefLabel)
 					if (bindingSet.getValue("label") != null) {
-						ldr.setLabel(bindingSet.getValue("label").stringValue());
+						ldr.setLabelLiteral((Literal)bindingSet.getValue("label"));							
 					}
-					cubeAttributes.add(ldr);
+					
+					//Add only once a attribute (not one for each available label)
+					if(!cubeAttributes.contains(ldr)){
+						cubeAttributes.add(ldr);
+					}else{
+						if(ignoreLang){
+							//First en then everything else
+							if(ldr.getLanguage().equals("en")){
+								cubeAttributes.remove(ldr);
+								cubeAttributes.add(ldr);
+							}
+						}else{
+							for(LDResource exisitingLdr:cubeAttributes){
+								if(exisitingLdr.equals(ldr)){
+									//The new ldr has the preferred language
+									if(ldr.getLanguage().equals(lang)){
+										cubeAttributes.remove(ldr);
+										cubeAttributes.add(ldr);
+									//The new ldr has the default language
+									}else if (ldr.getLanguage().equals(defaultlang)&&
+										!exisitingLdr.getLanguage().equals(lang)){
+										cubeAttributes.remove(ldr);
+										cubeAttributes.add(ldr);
+									}
+								}
+							}
+						}
+					}			
 				}
 			} catch (QueryEvaluationException e) {
 				e.printStackTrace();
@@ -657,12 +667,12 @@ public class CubeSPARQL {
 		//NEED TO CHECK QUERY
 		public static List<LDResource> getAttributeValues(String attributeURI,
 				String dataCubeURI, String cubeGraph, String cubeDSDGraph,
-				String lang, String SPARQLservice) {
+				String lang,String defaultlang,	boolean ignoreLang, String SPARQLservice) {
 
 			String getAttributeValues_query = "PREFIX qb: <http://purl.org/linked-data/cube#>" // Areti
 					+ "PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>"
 					+ "PREFIX skos: <http://www.w3.org/2004/02/skos/core#>"
-					+ "select  distinct ?value ?label ?skoslabel where {";
+					+ "select  distinct ?value ?label where {";
 			
 			// If a SPARQL service is defined
 			if (SPARQLservice != null) {
@@ -686,14 +696,9 @@ public class CubeSPARQL {
 				getAttributeValues_query += "GRAPH <" + cubeDSDGraph + "> {";
 			}
 			
-			getAttributeValues_query += "?observation qb:dataSet "
-					+ dataCubeURI
-					+ "."
-					+ "?observation <"
-					+ attributeURI
-					+ "> ?value."
-					+ "OPTIONAL {?value rdfs:label ?label. FILTER (lang(?label) = \""+lang+"\")}"
-					+ "OPTIONAL {?value skos:prefLabel ?skoslabel. FILTER (lang(?skoslabel) = \""+lang+"\")}}";
+			getAttributeValues_query += "?observation qb:dataSet "	+ dataCubeURI + "."
+					+ "?observation <"+ attributeURI+ "> ?value."
+					+ "OPTIONAL {?value skos:prefLabel|rdfs:label ?label. }}";
 
 			// If cube DSD graph is defined
 			if (cubeDSDGraph != null) {
@@ -710,18 +715,42 @@ public class CubeSPARQL {
 
 			try {
 				while (res.hasNext()) {
+					
 					BindingSet bindingSet = res.next();
-					LDResource resource = new LDResource();
+					LDResource ldr = new LDResource(bindingSet.getValue("value").stringValue());
 
-					Value skoslabel = bindingSet.getValue("skoslabel");
-					Value label = bindingSet.getValue("label");
-					if (skoslabel != null) {
-						resource.setLabel(skoslabel.stringValue());
-					} else if (label != null) {
-						resource.setLabel(label.stringValue());
+					// check if there is a label (rdfs:label or skos:prefLabel)
+					if (bindingSet.getValue("label") != null) {
+						ldr.setLabelLiteral((Literal)bindingSet.getValue("label"));							
 					}
-					resource.setURI(bindingSet.getValue("value").stringValue());
-					attributeValues.add(resource);
+					
+					//Add only once an atribute value (not one for each available label)
+					if(!attributeValues.contains(ldr)){
+						attributeValues.add(ldr);
+					}else{
+						if(ignoreLang){
+							//First en then everything else
+							if(ldr.getLanguage().equals("en")){
+								attributeValues.remove(ldr);
+								attributeValues.add(ldr);
+							}
+						}else{
+							for(LDResource exisitingLdr:attributeValues){
+								if(exisitingLdr.equals(ldr)){
+									//The new ldr has the preferred language
+									if(ldr.getLanguage().equals(lang)){
+										attributeValues.remove(ldr);
+										attributeValues.add(ldr);
+									//The new ldr has the default language
+									}else if (ldr.getLanguage().equals(defaultlang)&&
+										!exisitingLdr.getLanguage().equals(lang)){
+										attributeValues.remove(ldr);
+										attributeValues.add(ldr);
+									}
+								}
+							}
+						}
+					}						
 				}
 			} catch (QueryEvaluationException e) {
 				e.printStackTrace();
@@ -732,9 +761,9 @@ public class CubeSPARQL {
 
 		
 		public static LDResource getGeoDimension(String dataCubeURI,
-				String cubeGraph, String cubeDSDGraph, String lang,
-				String SPARQLservice) {
-			LDResource ldr = null;
+				String cubeGraph, String cubeDSDGraph, String lang, String defaultlang,
+				boolean ignoreLang, String SPARQLservice) {
+			
 			String getGeoDimension_query = "PREFIX qb: <http://purl.org/linked-data/cube#>"
 					+ "PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>"
 					+ "PREFIX sdmxDim: <http://purl.org/linked-data/sdmx/2009/dimension#>"
@@ -770,14 +799,11 @@ public class CubeSPARQL {
 					+ "     a qb:DimensionProperty. "
 					+ "OPTIONAL {"
 					+ "?uri qb:concept ?concept."
-					+ "?concept skos:prefLabel ?label.FILTER(LANGMATCHES(LANG(?label), \""+lang+"\"))"
-					+ "}" + 
-					"OPTIONAL {?uri qb:concept ?concept."+
-         "?concept rdfs:label ?label."+
-         "FILTER(LANGMATCHES(LANG(?label), \""+lang+"\"))} "+
-					//"{" + "{ ?uri rdfs:subPropertyOf+ sdmxDim:refArea }"
-					//+ "UNION" + "{ ?uri a sdmxDim:refArea }" + "}}";
-             " {{{ ?uri rdfs:subPropertyOf sdmxDim:refArea }UNION{?uri a sdmxDim:refArea} UNION {?uri qb:concept sdmxCon:refArea}}}}";
+					+ "?concept skos:prefLabel|rdfs:label ?label." 
+					+ "}" +					
+             " {{{ ?uri rdfs:subPropertyOf sdmxDim:refArea }" +
+              		"UNION{?uri a sdmxDim:refArea} " +
+              		"UNION {?uri qb:concept sdmxCon:refArea}}}}";
 
 			// If cube DSD graph is defined
 			if (cubeDSDGraph != null) {
@@ -790,12 +816,36 @@ public class CubeSPARQL {
 			}
 
 			TupleQueryResult res = QueryExecutor.executeSelect(getGeoDimension_query);
+			LDResource ldr = null;
 			try {
 				while (res.hasNext()) {
+					
 					BindingSet bindingSet = res.next();
-					ldr = new LDResource(bindingSet.getValue("uri").stringValue());
+					LDResource newldr = new LDResource(bindingSet.getValue("uri").stringValue());
+
+					// check if there is a label (rdfs:label or skos:prefLabel)
 					if (bindingSet.getValue("label") != null) {
-						ldr.setLabel(bindingSet.getValue("label").stringValue());
+						newldr.setLabelLiteral((Literal)bindingSet.getValue("label"));							
+					}
+					
+					if(ldr!=null){
+						if(ignoreLang){
+							//First en then everything else
+							if(newldr.getLanguage().equals("en")){
+								ldr=newldr;
+							}
+						}else{
+							//The new ldr has the preferred language
+							if(newldr.getLanguage().equals(lang)){
+								ldr=newldr;
+								//The new ldr has the default language
+							}else if (newldr.getLanguage().equals(defaultlang)&&
+								!ldr.getLanguage().equals(lang)){
+								ldr=newldr;
+							}
+						}
+					}else{
+						ldr=newldr;
 					}
 				}
 				return ldr;
@@ -812,7 +862,8 @@ public class CubeSPARQL {
 		
 			List<String> availableLanguages=new ArrayList<String>();
 			String getAvailableCubeLanguages_query="PREFIX skos: <http://www.w3.org/2004/02/skos/core#>" +
-					"select distinct (lang(?skoslabel) as ?lang) where {";
+					"PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>"+
+					"select distinct (lang(?label) as ?lang) where {";
 			
 			// If a SPARQL service is defined
 			if (SPARQLservice != null) {
@@ -825,7 +876,7 @@ public class CubeSPARQL {
 				getAvailableCubeLanguages_query += "GRAPH <" + cubeDSDGraph + "> {";
 			}
 			
-			getAvailableCubeLanguages_query+="?x skos:prefLabel ?skoslabel }";
+			getAvailableCubeLanguages_query+="?x skos:prefLabel ?label }";
 			
 			// If a cube DSD graph is defined
 			if (cubeDSDGraph != null) {
@@ -881,7 +932,7 @@ public class CubeSPARQL {
 			getDimensionLevels_query += "<"+dimensionURI +">  qb:codeList ?codelist." +
 					"?codelist xkos:levels ?levellist." +
 					"?levellist rdf:rest*/rdf:first ?level." +
-					"OPTIONAL{?level skos:prefLabel ?label.}}";
+					"OPTIONAL{?level skos:prefLabel|rdfs:label ?label.}}";
 						
 			// If a cube DSD graph is defined
 			if (cubeDSDGraph != null) {
@@ -908,7 +959,7 @@ public class CubeSPARQL {
 						ldr.setLabelLiteral((Literal)bindingSet.getValue("label"));							
 					}
 					
-					//Add only once a dimension (not one for each available label)
+					//Add only once a level (not one for each available label)
 					if(!dimensionLevels.contains(ldr)){
 						dimensionLevels.add(ldr);
 					}else{
@@ -980,7 +1031,7 @@ public class CubeSPARQL {
 			}
 
 			getDimensionLevels_query +=  "?level skos:member ?value." +
-					"OPTIONAL{?level skos:prefLabel ?label.}}";
+					"OPTIONAL{?level skos:prefLabel|rdfs:label ?label.}}";
 										
 			// If a cube graph is defined
 			if (cubeDSDGraph != null) {

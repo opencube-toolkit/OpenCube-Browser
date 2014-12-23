@@ -7,14 +7,15 @@ import java.util.List;
 import java.util.Random;
 
 import org.certh.opencube.utils.LDResource;
+import org.openrdf.model.Literal;
 import org.openrdf.query.BindingSet;
 import org.openrdf.query.QueryEvaluationException;
 import org.openrdf.query.TupleQueryResult;
  
 public class SliceSPARQL {
 
-	private static boolean globalDSD = false;
-	private static boolean notime = false;
+//	private static boolean globalDSD = false;
+//	private static boolean notime = false;
 
 	// Get all the fixed dimensions of a slice
 	// Input: The sliceURI, sliceGraph, SPARQL service
@@ -26,7 +27,7 @@ public class SliceSPARQL {
 		String getSliceDimensions_query = "PREFIX qb: <http://purl.org/linked-data/cube#>"
 				+ "PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>"
 				+ "PREFIX skos: <http://www.w3.org/2004/02/skos/core#>"
-				+ "select  distinct ?dim ?label ?skoslabel where {";
+				+ "select  distinct ?dim ?label where {";
 
 		// If a SPARQL service is defined
 		if (SPARQLservice != null) {
@@ -46,37 +47,14 @@ public class SliceSPARQL {
 			getSliceDimensions_query += "}";
 		}
 
-	//	getSliceDimensions_query += "OPTIONAL{";
-
 		// If a cube DSD graph is defined
 		if (cubeDSDGraph != null) {
 			getSliceDimensions_query += "GRAPH <" + cubeDSDGraph + "> {";
 		}
 		
-		getSliceDimensions_query+="?dim qb:concept ?cons.";
+		getSliceDimensions_query+="?dim qb:concept ?cons." +
+				"OPTIONAL{?cons skos:prefLabel|rdfs:label ?label.}}";
 		
-		if(!ignoreLang){
-			getSliceDimensions_query +=
-				"OPTIONAL{?cons skos:prefLabel ?skoslabel. FILTER (lang(?skoslabel) = \""+lang+"\")}" 
-				+ "OPTIONAL{?cons skos:prefLabel ?skoslabel.FILTER (lang(?skoslabel) = \""+defaultlang+"\")}" 
-				+ "OPTIONAL{?cons skos:prefLabel ?skoslabel. FILTER (lang(?skoslabel) = \"\")}" 
-				+ "OPTIONAL{?cons rdfs:label ?label. FILTER (lang(?label) = \""+lang+"\")}"
-				+ "OPTIONAL{?cons rdfs:label ?label. FILTER (lang(?label) = \""+defaultlang+"\")}"
-			 	+ "OPTIONAL{?cons rdfs:label ?label. FILTER (lang(?label) = \"\")}}";
-		}else{
-			getSliceDimensions_query +=
-					"OPTIONAL{?cons skos:prefLabel ?skoslabel.}"
-					+ "OPTIONAL{?cons rdfs:label ?label.}}";
-		}
-		
-	/*	getSliceDimensions_query += "{?dim rdfs:label ?label."
-				+ "FILTER (lang(?label) = \"\" || lang(?label) = \"en\")}"
-				+ "UNION {?dim skos:prefLabel ?skoslabel."
-				+ "FILTER (lang(?skoslabel) = \""+lang+"\")}"
-				+ "UNION {?dim qb:concept ?cons."
-				+ "?cons skos:prefLabel ?skoslabel."
-				+ "FILTER (lang(?skoslabel) = \""+lang+"\")}}}";*/
-
 		// If a cube DSD graph is defined
 		if (cubeDSDGraph != null) {
 			getSliceDimensions_query += "}";
@@ -93,19 +71,45 @@ public class SliceSPARQL {
 		try {
 
 			while (res.hasNext()) {
-
+				
 				BindingSet bindingSet = res.next();
 				LDResource ldr = new LDResource(bindingSet.getValue("dim").stringValue());
 
-				if(!sliceDimensions.contains(ldr)){
-					// check if there is an rdfs:label or skos:prefLabel
-					if (bindingSet.getValue("label") != null) {
-						ldr.setLabel(bindingSet.getValue("label").stringValue());
-					} else if (bindingSet.getValue("skoslabel") != null) {
-						ldr.setLabel(bindingSet.getValue("skoslabel").stringValue());
-					}
-					sliceDimensions.add(ldr);
+				// check if there is a label (rdfs:label or skos:prefLabel)
+				if (bindingSet.getValue("label") != null) {
+					ldr.setLabelLiteral((Literal)bindingSet.getValue("label"));							
 				}
+				
+				//Add the first instance of the dimension (regardless of the language)
+				if(!sliceDimensions.contains(ldr)){
+					sliceDimensions.add(ldr);
+				}else{
+					//If ignore language
+					if(ignoreLang){
+						//First en then everything else
+						if(ldr.getLanguage().equals("en")){
+							sliceDimensions.remove(ldr);
+							sliceDimensions.add(ldr);
+						}
+					}else{
+						for(LDResource exisitingLdr:sliceDimensions){
+							//Find the existing dimension that has the same URI (different language)
+							if(exisitingLdr.equals(ldr)){
+								//The new ldr has the preferred language
+								if(ldr.getLanguage().equals(lang)){
+									sliceDimensions.remove(ldr);
+									sliceDimensions.add(ldr);
+								//The new ldr has the default language and the existing does 
+								//not have the preferred language
+								}else if (ldr.getLanguage().equals(defaultlang)&&
+									!exisitingLdr.getLanguage().equals(lang)){
+									sliceDimensions.remove(ldr);
+									sliceDimensions.add(ldr);
+								}
+							}
+						}
+					}
+				}						
 			}
 		} catch (QueryEvaluationException e) {
 			e.printStackTrace();
@@ -115,8 +119,7 @@ public class SliceSPARQL {
 	}
 
 	// Get the values for all fixed dimensions of a slice
-	// Input: The fixed slice dimensions, The sliceURI, sliceGraph, SPARQL
-	// service
+	// Input: The fixed slice dimensions, The sliceURI, sliceGraph, SPARQL service
 	// The slice Graph and SPARQL service can be null if not available
 	public static HashMap<LDResource, LDResource> getSliceFixedDimensionsValues(
 			List<LDResource> sliceFixedDimensions, String sliceURI,
@@ -129,18 +132,16 @@ public class SliceSPARQL {
 			String getSliceFixedDimensionValues_query = "PREFIX qb: <http://purl.org/linked-data/cube#>"
 					+ "PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>"
 					+ "PREFIX skos: <http://www.w3.org/2004/02/skos/core#>"
-					+ "select  distinct ?fdimvalue ?label ?skoslabel where {";
+					+ "select  distinct ?fdimvalue ?label where {";
 
 			// If a SPARQL service is defined
 			if (SPARQLservice != null) {
-				getSliceFixedDimensionValues_query += "SERVICE "
-						+ SPARQLservice + " {";
+				getSliceFixedDimensionValues_query += "SERVICE "+ SPARQLservice + " {";
 			}
 
 			// If a slice graph is defined
 			if (sliceGraph != null) {
-				getSliceFixedDimensionValues_query += "GRAPH <" + sliceGraph
-						+ "> {";
+				getSliceFixedDimensionValues_query += "GRAPH <" + sliceGraph+ "> {";
 			}
 
 			getSliceFixedDimensionValues_query += sliceURI + " <"
@@ -157,38 +158,9 @@ public class SliceSPARQL {
 			if (cubeDSDGraph != null) {
 				getSliceFixedDimensionValues_query += "GRAPH <" + cubeDSDGraph+ "> {";
 			}
-						
-			getSliceFixedDimensionValues_query += "?fdimvalue rdf:type ?x.";
-			
-			if(!ignoreLang){
-				getSliceFixedDimensionValues_query +=
-					"OPTIONAL{?fdimvalue skos:prefLabel ?skoslabel."
-					+ "FILTER (lang(?skoslabel) = \""+lang+"\")}" 
-					+ "OPTIONAL{?fdimvalue skos:prefLabel ?skoslabel."
-					+ "FILTER (lang(?skoslabel) = \""+defaultlang+"\")}" 
-					+ "OPTIONAL{?fdimvalue skos:prefLabel ?skoslabel."
-					+ "FILTER (lang(?skoslabel) = \"\")}" 
-					+ "OPTIONAL{?fdimvalue rdfs:label ?label."
-					+ "FILTER (lang(?label) = \""+lang+"\")}"
-					+ "OPTIONAL{?fdimvalue rdfs:label ?label."
-					+ "FILTER (lang(?label) = \""+defaultlang+"\")}"
-				 	+ "OPTIONAL{?fdimvalue rdfs:label ?label."
-				 	+ "FILTER (lang(?label) = \"\")}}}";
-			}else{
-				getSliceFixedDimensionValues_query +=
-						"OPTIONAL{?fdimvalue skos:prefLabel ?skoslabel.}"
-						+ "OPTIONAL{?fdimvalue rdfs:label ?label.}}}";				
-			}	
-			
-			
-		/*	getSliceFixedDimensionValues_query += "{?fdimvalue rdfs:label ?label."
-					+ "FILTER (lang(?label) = \""+lang+"\")}"
-					+ "UNION {?fdimvalue skos:prefLabel ?skoslabel."
-					+ "FILTER (lang(?skoslabel) = \""+lang+"\")}"
-					+ "UNION {?fdimvalue qb:concept ?cons."
-					+ "?cons skos:prefLabel ?skoslabel."
-					+ "FILTER (lang(?skoslabel) = \""+lang+"\")}}}";*/
-
+			getSliceFixedDimensionValues_query+=
+					"?fdimvalue skos:prefLabel|rdfs:label ?label.}}";
+					
 			// If a cube DSD graph is defined
 			if (cubeDSDGraph != null) {
 				getSliceFixedDimensionValues_query += "}";
@@ -199,34 +171,48 @@ public class SliceSPARQL {
 				getSliceFixedDimensionValues_query += "}";
 			}
 
-			TupleQueryResult res = QueryExecutor
-					.executeSelect(getSliceFixedDimensionValues_query);
+			TupleQueryResult res = QueryExecutor.executeSelect(getSliceFixedDimensionValues_query);
 
 			try {
 
 				while (res.hasNext()) {
-
+					
+					
 					BindingSet bindingSet = res.next();
-					LDResource fdimvalue = new LDResource(bindingSet.getValue(
-							"fdimvalue").stringValue());
+					LDResource fdimvalue = new LDResource(bindingSet.getValue("fdimvalue").stringValue());
 
-					if(!sliceFixedDimensionsValues.keySet().contains(ldr)){
-						// check if there is an rdfs:label or skos:prefLabel or the values
-						if (bindingSet.getValue("label") != null) {
-							fdimvalue.setLabel(bindingSet.getValue("label")
-									.stringValue());
-						} else if (bindingSet.getValue("skoslabel") != null) {
-							fdimvalue.setLabel(bindingSet.getValue("skoslabel")
-									.stringValue());
-						}
-						sliceFixedDimensionsValues.put(ldr, fdimvalue);
+					// check if there is a label (rdfs:label or skos:prefLabel)
+					if (bindingSet.getValue("label") != null) {
+						fdimvalue.setLabelLiteral((Literal)bindingSet.getValue("label"));							
 					}
-
+					
+					//Add the first instance of the dimension (regardless of the language)
+					if(!sliceFixedDimensionsValues.keySet().contains(ldr)){
+						sliceFixedDimensionsValues.put(ldr, fdimvalue);
+					}else{
+						//If ignore language
+						if(ignoreLang){
+							//First en then everything else
+							if(fdimvalue.getLanguage().equals("en")){
+								sliceFixedDimensionsValues.put(ldr, fdimvalue);
+							}
+						}else{
+							LDResource existingFdimValue=sliceFixedDimensionsValues.get(ldr);
+							//The new fdimvalue has the preferred language
+							if(fdimvalue.getLanguage().equals(lang)){
+								sliceFixedDimensionsValues.put(ldr, fdimvalue);
+							//The new fdimvalue has the default language and the existing does 
+							//not have the preferred language
+							}else if (fdimvalue.getLanguage().equals(defaultlang)&&
+										!existingFdimValue.getLanguage().equals(lang)){
+								sliceFixedDimensionsValues.put(ldr, fdimvalue);
+							}
+						}													
+					}			
 				}
 			} catch (QueryEvaluationException e) {
 				e.printStackTrace();
 			}
-
 		}
 
 		return sliceFixedDimensionsValues;
@@ -243,7 +229,7 @@ public class SliceSPARQL {
 		String getSliceMeasure_query = "PREFIX qb: <http://purl.org/linked-data/cube#>"
 				+ "PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>"
 				+ "PREFIX skos: <http://www.w3.org/2004/02/skos/core#>"
-				+ "select  distinct ?dim ?label ?skoslabel where {";
+				+ "select  distinct ?dim ?label where {";
 
 		// If a SPARQL service is defined
 		if (SPARQLservice != null) {
@@ -269,31 +255,10 @@ public class SliceSPARQL {
 		}
 		
 		getSliceMeasure_query += "?dsd qb:component  ?cs."
-				+ "?cs qb:dimension  ?dim.";
-		
-		
-		if(!ignoreLang){
-			getSliceMeasure_query +=
-				"OPTIONAL{?dim skos:prefLabel ?skoslabel."
-				+ "FILTER (lang(?skoslabel) = \""+lang+"\")}" 
-				+ "OPTIONAL{?dim skos:prefLabel ?skoslabel."
-				+ "FILTER (lang(?skoslabel) = \""+defaultlang+"\")}" 
-				+ "OPTIONAL{?dim skos:prefLabel ?skoslabel."
-				+ "FILTER (lang(?skoslabel) = \"\")}" 
-				+ "OPTIONAL{?dim rdfs:label ?label."
-				+ "FILTER (lang(?label) = \""+lang+"\")}"
-				+ "OPTIONAL{?dim rdfs:label ?label."
-				+ "FILTER (lang(?label) = \""+defaultlang+"\")}"
-			 	+ "OPTIONAL{?dim rdfs:label ?label."
-			 	+ "FILTER (lang(?label) = \"\")}}";
-		}else{
-			getSliceMeasure_query +=
-					"OPTIONAL{?dim skos:prefLabel ?skoslabel.}"
-					+ "OPTIONAL{?dim rdfs:label ?label.}}";				
-		}	
-
-		
-
+				+ "?cs qb:dimension  ?dim." +
+				"OPTIONAL{?dim qb:concept ?cons." +
+				"?cons skos:prefLabel|rdfs:label ?label.}}";
+			
 		// If a cube DSD graph is defined
 		if (cubeDSDGraph != null) {
 			getSliceMeasure_query += "}";
@@ -304,25 +269,52 @@ public class SliceSPARQL {
 			getSliceMeasure_query += "}";
 		}
 
-		TupleQueryResult res = QueryExecutor
-				.executeSelect(getSliceMeasure_query);
+		TupleQueryResult res = QueryExecutor.executeSelect(getSliceMeasure_query);
 		List<LDResource> cubeDimensions = new ArrayList<LDResource>();
 
 		try {
 			while (res.hasNext()) {
+				
 				BindingSet bindingSet = res.next();
 				LDResource ldr = new LDResource(bindingSet.getValue("dim").stringValue());
 
-				if(!cubeDimensions.contains(ldr)){
-					// check if there is an rdfs:label or skos:prefLabel
-					if (bindingSet.getValue("label") != null) {
-						ldr.setLabel(bindingSet.getValue("label").stringValue());
-					} else if (bindingSet.getValue("skoslabel") != null) {
-						ldr.setLabel(bindingSet.getValue("skoslabel").stringValue());
-					}
-	
-					cubeDimensions.add(ldr);
+				// check if there is a label (rdfs:label or skos:prefLabel)
+				if (bindingSet.getValue("label") != null) {
+					ldr.setLabelLiteral((Literal)bindingSet.getValue("label"));							
 				}
+				
+				//Add the first instance of the dimension (regardless of the language)
+				if(!cubeDimensions.contains(ldr)){
+					cubeDimensions.add(ldr);
+				}else{
+					//If ignore language
+					if(ignoreLang){
+						//First en then everything else
+						if(ldr.getLanguage().equals("en")){
+							cubeDimensions.remove(ldr);
+							cubeDimensions.add(ldr);
+						}
+					}else{
+						for(LDResource exisitingLdr:cubeDimensions){
+							//Find the existing dimension that has the same URI (different language)
+							if(exisitingLdr.equals(ldr)){
+							//	if(ldr.getLanguage()!=null){
+									//The new ldr has the preferred language
+									if(ldr.getLanguage().equals(lang)){
+										cubeDimensions.remove(ldr);
+										cubeDimensions.add(ldr);
+									//The new ldr has the default language and the existing does 
+									//not have the preferred language
+									}else if (ldr.getLanguage().equals(defaultlang)&&
+										!exisitingLdr.getLanguage().equals(lang)){
+										cubeDimensions.remove(ldr);
+										cubeDimensions.add(ldr);
+									}
+							//	}
+							}
+						}
+					}
+				}				
 			}
 		} catch (QueryEvaluationException e) {
 			e.printStackTrace();
@@ -340,7 +332,7 @@ public class SliceSPARQL {
 		String getSliceMeasure_query = "PREFIX qb: <http://purl.org/linked-data/cube#>"
 				+ "PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>"
 				+ "PREFIX skos: <http://www.w3.org/2004/02/skos/core#>"
-				+ "select  distinct ?measure ?label ?skoslabel where {";
+				+ "select  distinct ?measure ?label where {";
 
 		// If a SPARQL service is defined
 		if (SPARQLservice != null) {
@@ -366,40 +358,10 @@ public class SliceSPARQL {
 		}
 		
 		getSliceMeasure_query += "?dsd qb:component  ?cs."
-				+ "?cs qb:measure  ?measure.";
-				
-		if(!ignoreLang){
-			getSliceMeasure_query +=
-				"OPTIONAL{?measure qb:concept ?cons. ?cons skos:prefLabel ?skoslabel."
-				+ "FILTER (lang(?skoslabel) = \""+lang+"\")}" 
-				+ "OPTIONAL{?measure qb:concept ?cons.?cons skos:prefLabel ?skoslabel."
-				+ "FILTER (lang(?skoslabel) = \""+defaultlang+"\")}" 
-				+ "OPTIONAL{?measure qb:concept ?cons. ?cons skos:prefLabel ?skoslabel."
-				+ "FILTER (lang(?skoslabel) = \"\")}" 
-				+ "OPTIONAL{?measure qb:concept ?cons. ?cons rdfs:label ?label."
-				+ "FILTER (lang(?label) = \""+lang+"\")}"
-				+ "OPTIONAL{?measure qb:concept ?cons. ?cons rdfs:label ?label."
-				+ "FILTER (lang(?label) = \""+defaultlang+"\")}"
-			 	+ "OPTIONAL{?measure qb:concept ?cons. ?cons rdfs:label ?label."
-			 	+ "FILTER (lang(?label) = \"\")}}";
-		}else{
-			getSliceMeasure_query +=
-					"OPTIONAL{?cons skos:prefLabel ?skoslabel.}"
-					+ "OPTIONAL{?cons rdfs:label ?label.}}";				
-		}	
-
-	/*	getSliceMeasure_query += "?dsd qb:component  ?cs."
-				+ "?cs qb:measure  ?measure."
-				+ "OPTIONAL {?measure rdfs:label ?label."
-				+ "FILTER (lang(?label) = \""+lang+"\")}"
-				+ "OPTIONAL {?measure skos:prefLabel ?skoslabel."
-				+ "FILTER (lang(?skoslabel) = \""+lang+"\")}"
-				+ "OPTIONAL {?measure qb:concept ?cons."
-				+ "?cons skos:prefLabel ?skoslabel."
-				+ "FILTER (lang(?skoslabel) = \""+lang+"\")}}";*/
+				+ "?cs qb:measure  ?measure." +
+				"OPTIONAL{?measure qb:concept ?cons. " +
+				"?cons skos:prefLabel|rdfs:label ?label.}}";				
 		
-		
-
 		// If a cube DSD graph is defined
 		if (cubeDSDGraph != null) {
 			getSliceMeasure_query += "}";
@@ -412,26 +374,49 @@ public class SliceSPARQL {
 
 		TupleQueryResult res = QueryExecutor.executeSelect(getSliceMeasure_query);
 
-
 		List<LDResource> cubeMeasures = new ArrayList<LDResource>();
 
 		try {
 			while (res.hasNext()) {
-									
+				
 				BindingSet bindingSet = res.next();
 				LDResource ldr = new LDResource(bindingSet.getValue("measure").stringValue());
 
-				if(!cubeMeasures.contains(ldr)){
-					// check if there is an rdfs:label or skos:prefLabel
-					if (bindingSet.getValue("label") != null) {
-						ldr.setLabel(bindingSet.getValue("label").stringValue());
-					} else if (bindingSet.getValue("skoslabel") != null) {
-						ldr.setLabel(bindingSet.getValue("skoslabel").stringValue());
-					}
-	
-					cubeMeasures.add(ldr);
+				// check if there is a label (rdfs:label or skos:prefLabel)
+				if (bindingSet.getValue("label") != null) {
+					ldr.setLabelLiteral((Literal)bindingSet.getValue("label"));							
 				}
 				
+				//Add the first instance of the dimension (regardless of the language)
+				if(!cubeMeasures.contains(ldr)){
+					cubeMeasures.add(ldr);
+				}else{
+					//If ignore language
+					if(ignoreLang){
+						//First en then everything else
+						if(ldr.getLanguage().equals("en")){
+							cubeMeasures.remove(ldr);
+							cubeMeasures.add(ldr);
+						}
+					}else{
+						for(LDResource exisitingLdr:cubeMeasures){
+							//Find the existing dimension that has the same URI (different language)
+							if(exisitingLdr.equals(ldr)){
+								//The new ldr has the preferred language
+								if(ldr.getLanguage().equals(lang)){
+									cubeMeasures.remove(ldr);
+									cubeMeasures.add(ldr);
+								//The new ldr has the default language and the existing does 
+								//not have the preferred language
+								}else if (ldr.getLanguage().equals(defaultlang)&&
+									!exisitingLdr.getLanguage().equals(lang)){
+									cubeMeasures.remove(ldr);
+									cubeMeasures.add(ldr);
+								}
+							}
+						}
+					}
+				}	
 			}
 		} catch (QueryEvaluationException e) {
 			e.printStackTrace();
@@ -450,7 +435,7 @@ public class SliceSPARQL {
 		String getDimensionValues_query = "PREFIX qb: <http://purl.org/linked-data/cube#>"
 				+ "PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>"
 				+ "PREFIX skos: <http://www.w3.org/2004/02/skos/core#>"
-				+ "select  distinct ?value ?label ?skoslabel where {";
+				+ "select  distinct ?value ?label where {";
 
 		// If a SPARQL service is defined
 		if (SPARQLservice != null) {
@@ -487,34 +472,8 @@ public class SliceSPARQL {
 			getDimensionValues_query += "GRAPH <" + cubeDSDGraph + "> {";
 		}
 		
-		getDimensionValues_query += "?value rdf:type ?x.";
-		
-		if(!ignoreLang){
-			getDimensionValues_query +=
-				"OPTIONAL{?value skos:prefLabel ?skoslabel."
-				+ "FILTER (lang(?skoslabel) = \""+lang+"\")}" 
-				+ "OPTIONAL{?value skos:prefLabel ?skoslabel."
-				+ "FILTER (lang(?skoslabel) = \""+defaultlang+"\")}" 
-				+ "OPTIONAL{?value skos:prefLabel ?skoslabel."
-				+ "FILTER (lang(?skoslabel) = \"\")}" 
-				+ "OPTIONAL{?value rdfs:label ?label."
-				+ "FILTER (lang(?label) = \""+lang+"\")}"
-				+ "OPTIONAL{?value rdfs:label ?label."
-				+ "FILTER (lang(?label) = \""+defaultlang+"\")}"
-			 	+ "OPTIONAL{?value rdfs:label ?label."
-			 	+ "FILTER (lang(?label) = \"\")}}}";
-		}else{
-			getDimensionValues_query +=
-				      "OPTIONAL{?value skos:prefLabel ?skoslabel.}"
-					+ "OPTIONAL{?value rdfs:label ?label.}}}";				
-		}	
-		
-		
-	/*	getDimensionValues_query += "{?value rdfs:label ?label."
-				+ "FILTER (lang(?label) = \""+lang+"\")}"
-				+ "UNION {?value skos:prefLabel ?skoslabel."
-				+ "FILTER (lang(?skoslabel) = \""+lang+"\")}}}";*/
-
+		getDimensionValues_query+="?value skos:prefLabel|rdfs:label ?label.}}";
+	
 		// If a cube DSD graph is defined
 		if (cubeDSDGraph != null) {
 			getDimensionValues_query += "}";
@@ -531,17 +490,44 @@ public class SliceSPARQL {
 
 		try {
 			while (res.hasNext()) {
-				BindingSet b = res.next();
-				LDResource resource = new LDResource(b.getValue("value").stringValue());
+				
+				BindingSet bindingSet = res.next();
+				LDResource ldr = new LDResource(bindingSet.getValue("value").stringValue());
 
-				if(!dimensionValues.contains(resource)){
-					if (b.getValue("label") != null) {
-						resource.setLabel(b.getValue("label").stringValue());
-					} else if (b.getValue("skoslabel") != null) {
-						resource.setLabel(b.getValue("skoslabel").stringValue());
+				// check if there is a label (rdfs:label or skos:prefLabel)
+				if (bindingSet.getValue("label") != null) {
+					ldr.setLabelLiteral((Literal)bindingSet.getValue("label"));							
+				}
+				
+				//Add the first instance of the dimension (regardless of the language)
+				if(!dimensionValues.contains(ldr)){
+					dimensionValues.add(ldr);
+				}else{
+					//If ignore language
+					if(ignoreLang){
+						//First en then everything else
+						if(ldr.getLanguage().equals("en")){
+							dimensionValues.remove(ldr);
+							dimensionValues.add(ldr);
+						}
+					}else{
+						for(LDResource exisitingLdr:dimensionValues){
+							//Find the existing dimension that has the same URI (different language)
+							if(exisitingLdr.equals(ldr)){
+								//The new ldr has the preferred language
+								if(ldr.getLanguage().equals(lang)){
+									dimensionValues.remove(ldr);
+									dimensionValues.add(ldr);
+								//The new ldr has the default language and the existing does 
+								//not have the preferred language
+								}else if (ldr.getLanguage().equals(defaultlang)&&
+									!exisitingLdr.getLanguage().equals(lang)){
+									dimensionValues.remove(ldr);
+									dimensionValues.add(ldr);
+								}
+							}
+						}
 					}
-	
-					dimensionValues.add(resource);
 				}
 			}
 		} catch (QueryEvaluationException e1) {
@@ -609,13 +595,11 @@ public class SliceSPARQL {
 				+ "select distinct ?graph_uri where{";
 
 		if (SPARQLservice != null) {
-			getCubeStructureGraphFromSlice_query += "SERVICE " + SPARQLservice
-					+ " {";
+			getCubeStructureGraphFromSlice_query += "SERVICE " + SPARQLservice+ " {";
 		}
 
 		if (sliceGraph != null) {
-			getCubeStructureGraphFromSlice_query += "GRAPH <" + sliceGraph
-					+ "> {";
+			getCubeStructureGraphFromSlice_query += "GRAPH <" + sliceGraph	+ "> {";
 		}
 
 		getCubeStructureGraphFromSlice_query += sliceURI
@@ -639,17 +623,7 @@ public class SliceSPARQL {
 		String graphURI = null;
 		try {
 			while (res.hasNext()) {
-				String tmpgraphURI = res.next().getValue("graph_uri")
-						.toString();
-				if (globalDSD && tmpgraphURI.contains("globaldsd")) {
-					graphURI = tmpgraphURI;
-				} else if (!globalDSD && !tmpgraphURI.contains("globaldsd")) {
-					if (notime && tmpgraphURI.contains("notime")) {
-						graphURI = tmpgraphURI;
-					} else if (!notime && !tmpgraphURI.contains("notime")) {
-						graphURI = tmpgraphURI;
-					}
-				}
+				graphURI = res.next().getValue("graph_uri").toString();				
 			}
 		} catch (QueryEvaluationException e) {
 			e.printStackTrace();

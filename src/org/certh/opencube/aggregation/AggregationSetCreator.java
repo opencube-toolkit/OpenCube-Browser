@@ -136,6 +136,7 @@ public class AggregationSetCreator extends
 					
 					//Get the available languages of labels
 					availableLanguages=CubeSPARQL.getAvailableCubeLanguages(
+							
 							cubeDSDGraph,SPARQL_Service);
 
 					//get the selected language to use
@@ -208,7 +209,6 @@ public class AggregationSetCreator extends
 			FLabel noCubes4Aggregation = new FLabel("noCubes4Aggregation",
 					"<b>There are no available cubes to enable OLAP-like browsing<b>");
 			cnt.add(noCubes4Aggregation);
-
 		}
 		return cnt;
 

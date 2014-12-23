@@ -58,17 +58,81 @@ public static Map<LDResource,Integer> getAllAvailableCubesAndDimCount(String SPA
 			+ "PREFIX skos: <http://www.w3.org/2004/02/skos/core#>"
 			+ "PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>" 
 			+ "PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>"
-			+"select distinct ?dataset (COUNT(?dim) AS ?dimcount) ?label where {";
+			+"select distinct ?dataset ?dim ?label where {";
 	
 	getAllAvailableCubesAndDimCount_query+="GRAPH ?cubeGraph{" +
 			"?dataset rdf:type qb:DataSet.?dataset qb:structure ?dsd." +
 			"OPTIONAL{?dataset rdfs:label ?label.}}" +
 			"GRAPH ?cubeDSDgraph{?dsd qb:component ?comp.?comp qb:dimension ?dim.}}";
 	
-		getAllAvailableCubesAndDimCount_query+="GROUP by ?dataset ?label";
+		getAllAvailableCubesAndDimCount_query+="GROUP by ?dataset ?dim ?label";
 	
 		TupleQueryResult res = QueryExecutor.executeSelect_direct(
 					getAllAvailableCubesAndDimCount_query, SPARQLservice);
+	
+	Map<LDResource, Integer> allCubesAndDimCount=new HashMap<LDResource, Integer>();
+	
+	//IGNORE THE FREQ AND UNIT DIMENSIONS AT THE COUNT
+	LDResource freq=new LDResource("http://eurostat.linked-statistics.org/property#FREQ");
+	LDResource unit=new LDResource("http://eurostat.linked-statistics.org/property#unit");
+	List<LDResource> ignoreList=new ArrayList<LDResource>();
+	ignoreList.add(freq);
+	ignoreList.add(unit);
+	
+	try {
+		while(res.hasNext()){
+			BindingSet bindingSet = res.next();
+			LDResource dataset = new LDResource(bindingSet.getValue("dataset").stringValue());
+			LDResource dim = new LDResource(bindingSet.getValue("dim").stringValue());
+			//Ignore freq and unit dimensions
+			if(!ignoreList.contains(dim)){
+				if(bindingSet.getValue("label")!=null){
+					dataset.setLabel(bindingSet.getValue("label").stringValue());
+				}
+				if(allCubesAndDimCount.get(dataset)==null){
+					allCubesAndDimCount.put(dataset,1);
+				}else{
+					Integer currentCount=allCubesAndDimCount.get(dataset);
+					currentCount++;
+					allCubesAndDimCount.put(dataset,currentCount);
+				}
+			}
+		//	allCubesAndDimCount.put(ldr,Integer.parseInt(bindingSet.getValue("dimcount").stringValue()));
+		}
+	} catch (QueryEvaluationException e) {
+		e.printStackTrace();
+	}
+
+	return allCubesAndDimCount;			 
+}
+
+/*
+public static Map<LDResource,Integer> getAllAvailableCubesAndDimCount(String SPARQLservice){
+	
+	String getAllAvailableCubesAndDimCount_query=
+			  "PREFIX  qb: <http://purl.org/linked-data/cube#>" 
+			+ "PREFIX skos: <http://www.w3.org/2004/02/skos/core#>"
+			+ "PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>"
+			+"select distinct ?dataset (COUNT(?dim) AS ?dimcount) ?label where {";
+	
+	// If a SPARQL service is defined
+	if (SPARQLservice != null) {
+		getAllAvailableCubesAndDimCount_query += "SERVICE " + SPARQLservice + " { ";
+	}
+	
+	getAllAvailableCubesAndDimCount_query+="GRAPH ?cubeGraph{" +
+			"?dataset rdf:type qb:DataSet.?dataset qb:structure ?dsd." +
+			"OPTIONAL{?dataset rdfs:label ?label.}}" +
+			"GRAPH ?cubeDSDgraph{?dsd qb:component ?comp.?comp qb:dimension ?dim.}}";
+	
+	// If a SPARQL service is defined
+	if (SPARQLservice != null) {
+		getAllAvailableCubesAndDimCount_query += "}";
+	}
+	
+	getAllAvailableCubesAndDimCount_query+="GROUP by ?dataset ?label";
+	
+	TupleQueryResult res = QueryExecutor.executeSelect(getAllAvailableCubesAndDimCount_query);
 	
 	Map<LDResource, Integer> allCubesAndDimCount=new HashMap<LDResource, Integer>();
 	
@@ -86,7 +150,7 @@ public static Map<LDResource,Integer> getAllAvailableCubesAndDimCount(String SPA
 	}
 
 	return allCubesAndDimCount;			 
-}
+}*/
 
 	//Get all compatible cubes
 	//Compatible: - have the dimensions of the original cube
@@ -340,7 +404,9 @@ public static Map<LDResource,Integer> getAllAvailableCubesAndDimCount(String SPA
 		} catch (QueryEvaluationException e) {
 			e.printStackTrace();
 		}
-						
+
+		
+		//CHECK VALUES AT THE EUROSTAT SPARQL ENDPOINT -> CHECK CODE LISTS
 		boolean checkValues=false;
 		
 		// Get Cube Graph
@@ -353,7 +419,7 @@ public static Map<LDResource,Integer> getAllAvailableCubesAndDimCount(String SPA
 		
 		for(LDResource cube:potentialCompatibleCubes){
 						
-				//the same number of dimensions 
+			//the same number of dimensions 
 			if(allCubesAndDimCount.get(cube)==cubeDimensions.size()
 					&& !cube.equals(selectedcube)  ){
 				
@@ -412,6 +478,7 @@ public static Map<LDResource,Integer> getAllAvailableCubesAndDimCount(String SPA
 					for(LDResource dim:cubeDimensions){
 						List<LDResource> dimValues=cubeDimensionsValues.get(dim);
 						List<LDResource> compatibleDimValues=compatibleCubeDimensionsValues.get(dim);
+						//DEN THELOYME NA EINAI KARIBWS TA IDIA TA VALUES TWN DIMENSIONS
 						if(!(compatibleDimValues.containsAll(dimValues)&&
 								compatibleDimValues.size()==dimValues.size())){
 							isCompatible=false;

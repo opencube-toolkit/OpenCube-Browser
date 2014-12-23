@@ -79,15 +79,13 @@ public class EurostatCompatibity extends
 	
 	// The SPARQL service to get data (not required)
 		//private String SPARQL_Service="<http://localhost:8888/sparql>";
-		
+	
+	//USE THE EUROSTAT STARQL ENDPOINT!!!!!
 	private String SPARQL_Service="<http://eurostat.linked-statistics.org/sparql>";
 
 	// Ignore multiple languages
 	private boolean ignoreLang=true;
-	
-	
-	
-	
+		
 	public static class Config extends WidgetBaseConfig {
 		@ParameterConfigDoc(desc = "SPARQL service to forward queries", required = false)
 		public String sparqlService;
@@ -102,7 +100,6 @@ public class EurostatCompatibity extends
 	@Override
 	protected FComponent getComponent(String id) {
 
-		// final Config config = get();
 		// Central container
 		cnt = new FContainer(id);
 
@@ -121,9 +118,13 @@ public class EurostatCompatibity extends
 			e2.printStackTrace();
 		}
 		
-		for (LDResource cube : allCubesAndDimCount.keySet()) {
+		
+		LDResource cube=null;
+		for (LDResource mycube : allCubesAndDimCount.keySet()) {
+				cube=mycube;
+		
 			System.out.println("Checking cube: "+cubeCount +"  ("+cube.getURI()+")");
-			
+				
 			selectedCubeURI = "<" + cube.getURI() + ">";
 			// Get Cube/Slice Graph
 			cubeGraph = CubeSPARQL.getCubeSliceGraph(selectedCubeURI,SPARQL_Service);
@@ -139,6 +140,12 @@ public class EurostatCompatibity extends
 							selectedCubeURI, cubeGraph, cubeDSDGraph,
 							selectedLanguage, defaultLang, ignoreLang,
 							SPARQL_Service);
+					
+					//REMOVE FREQ AND UNTI DIMENSIONS
+					LDResource freq=new LDResource("http://eurostat.linked-statistics.org/property#FREQ");
+					LDResource unit=new LDResource("http://eurostat.linked-statistics.org/property#unit");
+					cubeDimensions.remove(freq);
+					cubeDimensions.remove(unit);
 				}
 			});
 
@@ -214,9 +221,11 @@ public class EurostatCompatibity extends
 			System.out.println("Total memory hits: "+SelectionSPARQL_Eurostat.memoryHits);
 			
 			allCompatibleCubes.put(cube, compatibleAddValue2Level);
-			writer.println(cubeCount+","+allCubesAndDimCount.get(cube)+","+compatibleAddValue2Level.size()+","+cube.getURI());
+
+			//Write to file: NUMBER_OF_DIMS,COMPATIBLE_CUBES,CUBE_URI
+			writer.println(allCubesAndDimCount.get(cube)+","+compatibleAddValue2Level.size()+","+cube.getURI());
 			
-			if(cubeCount==1000)break;
+	//		if(cubeCount==10)break;
 			cubeCount++;		
 		}
 
@@ -230,12 +239,13 @@ public class EurostatCompatibity extends
 			e2.printStackTrace();
 		}
 		long matches=0;
-		for(LDResource cube:allCompatibleCubes.keySet()){
-			List<LDResource> compatible=allCompatibleCubes.get(cube);
+		//FOR EACH CUBE WRITE MYCUBE--> OTHER_COMPATIBLE_CUBE
+		for(LDResource mycube:allCompatibleCubes.keySet()){
+			List<LDResource> compatible=allCompatibleCubes.get(mycube);
 			writerMatches.println("Matches: "+compatible.size());
 			for(LDResource comp:compatible){
-				if(!cube.getURI().equals(comp.getURI())){
-					writerMatches.println(cube.getURI()+" --> "+comp.getURI());
+				if(!mycube.getURI().equals(comp.getURI())){
+					writerMatches.println(mycube.getURI()+" --> "+comp.getURI());
 					matches++;
 				}
 			}

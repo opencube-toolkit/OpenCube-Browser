@@ -4,3 +4,4 @@ AggregationSetCreator=org.certh.opencube.aggregation.AggregationSetCreator
 SliceCreator=org.certh.opencube.slicing.SliceCreator
 CubeSelection=org.certh.opencube.selection.CubeSelection
 EurostatCompatibity=org.certh.opencube.selection.EurostatCompatibity
+LinkCreator=org.certh.opencube.selection.LinkCreator

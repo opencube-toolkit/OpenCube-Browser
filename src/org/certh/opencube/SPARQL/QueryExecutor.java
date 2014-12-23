@@ -27,7 +27,7 @@ public class QueryExecutor {
 					.createTupleQuery(query);
 
 			TupleQueryResult res = null;
-		//	System.out.println(query);
+			System.out.println(query);
 			long startTime = System.currentTimeMillis();
 			try {
 				TupleQuery tulpequery = queryBuilder.build(dm);
@@ -135,7 +135,7 @@ public class QueryExecutor {
 			RepositoryConnection con = new SPARQLConnection(repo);
 
 			TupleQueryResult res = null;
-			//System.out.println(query);
+			System.out.println(query);
 			try {
 				TupleQuery tulpequery = con.prepareTupleQuery(QueryLanguage.SPARQL,	query);
 				res = tulpequery.evaluate();

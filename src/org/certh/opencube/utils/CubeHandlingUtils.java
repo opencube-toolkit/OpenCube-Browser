@@ -251,7 +251,8 @@ public class CubeHandlingUtils {
 	public static HashMap<LDResource, List<LDResource>> getAttrValues(
 			// Areti
 			List<LDResource> attributes, String cubeURI, String cubeGraph,
-			String cubeDSDGraph, String lang,String serviceURI) {
+			String cubeDSDGraph, String lang, String defaultLang, boolean ignoreLang,
+			String serviceURI) {
 
 		// Create an executor to hold all threads
 		ExecutorService executor = Executors.newFixedThreadPool(attributes
@@ -261,7 +262,7 @@ public class CubeHandlingUtils {
 		// Create one thread for each attribute
 		for (final LDResource vRes : attributes) {
 			Callable<HashMap<LDResource, List<LDResource>>> worker = new AttributeValuesThread(
-					vRes, cubeURI, cubeGraph, cubeDSDGraph, lang,serviceURI);
+					vRes, cubeURI, cubeGraph, cubeDSDGraph, lang,defaultLang, ignoreLang,serviceURI);
 			Future<HashMap<LDResource, List<LDResource>>> submit = executor
 					.submit(worker);
 			list.add(submit);

@@ -7,6 +7,7 @@ import java.util.Random;
 import java.util.Set;
 
 import org.certh.opencube.utils.LDResource;
+import org.openrdf.model.Literal;
 import org.openrdf.query.BindingSet;
 import org.openrdf.query.QueryEvaluationException;
 import org.openrdf.query.TupleQueryResult;
@@ -115,47 +116,29 @@ public class AggregationSPARQL {
 	}
 
 	public static List<LDResource> getAggegationSetDimsFromCube(String cubeURI,
-			String cubeDSDGraph, String lang,boolean ignoreLang,  String SPARQLservice) {
+			String cubeDSDGraph, String lang,String defaultlang,boolean ignoreLang,  String SPARQLservice) {
 
 		String getAggegationSetDimsFromCube_query = "PREFIX  qb: <http://purl.org/linked-data/cube#>"
 				+ "PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>"
 				+ "PREFIX skos: <http://www.w3.org/2004/02/skos/core#>"
-				+ "select  distinct ?dim ?label ?skoslabel where {";
+				+ "select  distinct ?dim ?label where {";
 
 		// If a SPARQL service is defined
 		if (SPARQLservice != null) {
-			getAggegationSetDimsFromCube_query += "SERVICE " + SPARQLservice
-					+ " {";
+			getAggegationSetDimsFromCube_query += "SERVICE " + SPARQLservice + " {";
 		}
 
 		// If a cube graph is defined
 		if (cubeDSDGraph != null) {
-			getAggegationSetDimsFromCube_query += "GRAPH <" + cubeDSDGraph
-					+ "> {";
+			getAggegationSetDimsFromCube_query += "GRAPH <" + cubeDSDGraph	+ "> {";
 		}
 
-		getAggegationSetDimsFromCube_query += cubeURI
-				+ " qb:aggregationSet ?set."
+		getAggegationSetDimsFromCube_query += cubeURI+ " qb:aggregationSet ?set."
 				+ "?dataset qb:aggregationSet ?set."
 				+ "?dsd qb:component ?comp."
-				+ "?comp qb:dimension ?dim.";
-		
-		if(!ignoreLang){
-			getAggegationSetDimsFromCube_query +=
-			      "OPTIONAL {?dim rdfs:label ?label."
-				+ "FILTER (lang(?label) = \""+lang+"\")}"
-				+ "OPTIONAL {?dim skos:prefLabel ?skoslabel."
-				+ "FILTER (lang(?skoslabel) = \""+lang+"\")}"
-				+ "OPTIONAL {?dim qb:concept ?cons."
-				+ "?cons skos:prefLabel ?skoslabel."
-				+ "FILTER (lang(?skoslabel) = \""+lang+"\") }";
-		}else{
-			getAggegationSetDimsFromCube_query +=
-				      "OPTIONAL {?dim rdfs:label ?label.}"
-					+ "OPTIONAL {?dim skos:prefLabel ?skoslabel.}"
-					+ "OPTIONAL {?dim qb:concept ?cons."
-					+ "?cons skos:prefLabel ?skoslabel.}";
-		}
+				+ "?comp qb:dimension ?dim."
+				+"OPTIONAL{?dim qb:concept ?cons." +
+				 "?cons skos:prefLabel|rdfs:label ?label.}";	
 
 		// If a cube DSD graph is defined
 		if (cubeDSDGraph != null) {
@@ -176,21 +159,45 @@ public class AggregationSPARQL {
 		try {
 
 			while (res.hasNext()) {
-
+				
 				BindingSet bindingSet = res.next();
-				LDResource ldr = new LDResource(bindingSet.getValue("dim")
-						.stringValue());
+				LDResource ldr = new LDResource(bindingSet.getValue("dim").stringValue());
 
-				if(!aggegationSetDimensions.contains(ldr)){
-					// check if there is an rdfs:label or skos:prefLabel
-					if (bindingSet.getValue("label") != null) {
-						ldr.setLabel(bindingSet.getValue("label").stringValue());
-					} else if (bindingSet.getValue("skoslabel") != null) {
-						ldr.setLabel(bindingSet.getValue("skoslabel").stringValue());
-					}
-	
-					aggegationSetDimensions.add(ldr);
+				// check if there is a label (rdfs:label or skos:prefLabel)
+				if (bindingSet.getValue("label") != null) {
+					ldr.setLabelLiteral((Literal)bindingSet.getValue("label"));							
 				}
+				
+				//Add the first instance of the dimension (regardless of the language)
+				if(!aggegationSetDimensions.contains(ldr)){
+					aggegationSetDimensions.add(ldr);
+				}else{
+					//If ignore language
+					if(ignoreLang){
+						//First en then everything else
+						if(ldr.getLanguage().equals("en")){
+							aggegationSetDimensions.remove(ldr);
+							aggegationSetDimensions.add(ldr);
+						}
+					}else{
+						for(LDResource exisitingLdr:aggegationSetDimensions){
+							//Find the existing dimension that has the same URI (different language)
+							if(exisitingLdr.equals(ldr)){
+								//The new ldr has the preferred language
+								if(ldr.getLanguage().equals(lang)){
+									aggegationSetDimensions.remove(ldr);
+									aggegationSetDimensions.add(ldr);
+								//The new ldr has the default language and the existing does 
+								//not have the preferred language
+								}else if (ldr.getLanguage().equals(defaultlang)&&
+										!exisitingLdr.getLanguage().equals(lang)){
+									aggegationSetDimensions.remove(ldr);
+									aggegationSetDimensions.add(ldr);
+								}
+							}
+						}
+					}
+				}			
 			}
 		} catch (QueryEvaluationException e) {
 			e.printStackTrace();
@@ -206,46 +213,26 @@ public class AggregationSPARQL {
 		String getAggegationSetDimsFromCube_query = "PREFIX  qb: <http://purl.org/linked-data/cube#>"
 				+ "PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>"
 				+ "PREFIX skos: <http://www.w3.org/2004/02/skos/core#>"
-				+ "select  distinct ?dataset ?dim ?label ?skoslabel where {";
+				+ "select  distinct ?dataset ?dim ?label where {";
 
 		// If a SPARQL service is defined
 		if (SPARQLservice != null) {
-			getAggegationSetDimsFromCube_query += "SERVICE " + SPARQLservice
-					+ " {";
+			getAggegationSetDimsFromCube_query += "SERVICE " + SPARQLservice+ " {";
 		}
 
 		// If a cube graph is defined
 		if (cubeDSDGraph != null) {
-			getAggegationSetDimsFromCube_query += "GRAPH <" + cubeDSDGraph
-					+ "> {";
+			getAggegationSetDimsFromCube_query += "GRAPH <" + cubeDSDGraph+ "> {";
 		}
 
 		getAggegationSetDimsFromCube_query += cubeURI
 				+ " qb:aggregationSet ?set."
 				+ "?dataset qb:aggregationSet ?set."
 				+ "?dsd qb:component ?comp."
-				+ "?comp qb:dimension ?dim.";
-						
-		if(!ignorelang){
-			getAggegationSetDimsFromCube_query +=
-					"OPTIONAL{?dim qb:concept ?cons.?cons skos:prefLabel ?skoslabel."
-					+ "FILTER (lang(?skoslabel) = \""+lang+"\")}" 
-					+ "OPTIONAL{?dim qb:concept ?cons.?cons skos:prefLabel ?skoslabel."
-					+ "FILTER (lang(?skoslabel) = \""+defaultlang+"\")}" 
-					+ "OPTIONAL{?dim qb:concept ?cons.?cons skos:prefLabel ?skoslabel."
-					+ "FILTER (lang(?skoslabel) = \"\")}" 
-					+ "OPTIONAL{?dim qb:concept ?cons.?cons rdfs:label ?label."
-					+ "FILTER (lang(?label) = \""+lang+"\")}"
-					+ "OPTIONAL{?dim qb:concept ?cons.?cons rdfs:label ?label."
-					+ "FILTER (lang(?label) = \""+defaultlang+"\")}"
-				 	+ "OPTIONAL{?dim qb:concept ?cons.?cons rdfs:label ?label."
-					+ "FILTER (lang(?label) = \"\")}";
-		}else{
-			getAggegationSetDimsFromCube_query +=
-					"OPTIONAL{?dim qb:concept ?cons.?cons skos:prefLabel ?skoslabel.}" 
-					+ "OPTIONAL{?dim qb:concept ?cons.?cons rdfs:label ?label.}";				
-		}
-		
+				+ "?comp qb:dimension ?dim."
+				+"OPTIONAL{?dim qb:concept ?cons." +
+				"?cons skos:prefLabel|rdfs:label ?label.}";
+			
 		// If a cube DSD graph is defined
 		if (cubeDSDGraph != null) {
 			getAggegationSetDimsFromCube_query += "}";
@@ -265,31 +252,55 @@ public class AggregationSPARQL {
 
 		try {
 			while (res.hasNext()) {
-
-				BindingSet b = res.next();
-
-				LDResource cube = new LDResource(b.getValue("dataset").stringValue());
 				
-				LDResource dim = new LDResource(b.getValue("dim").stringValue());
-				if (b.getValue("label") != null) {
-					dim.setLabel(b.getValue("label").stringValue());
-				} else if (b.getValue("skoslabel") != null) {
-					dim.setLabel(b.getValue("skoslabel").stringValue());
-				} 
+				BindingSet bindingSet = res.next();
+				LDResource cube = new LDResource(bindingSet.getValue("dataset").stringValue());
+				LDResource dim = new LDResource(bindingSet.getValue("dim").stringValue());
 
+				// check if there is a label (rdfs:label or skos:prefLabel)
+				if (bindingSet.getValue("label") != null) {
+					dim.setLabelLiteral((Literal)bindingSet.getValue("label"));							
+				}			
+				
 				if (aggregationSetCubeDimensions.get(cube) == null) {
 					List<LDResource> cubeDimensions = new ArrayList<LDResource>();
 					cubeDimensions.add(dim);
 					aggregationSetCubeDimensions.put(cube, cubeDimensions);
 				} else {
 					List<LDResource> cubeDimensions = aggregationSetCubeDimensions.get(cube);
-					//Add only 1 instance of each dim (no use multiple labels)
+				
+					//Add the first instance of the dimension (regardless of the language)
 					if(!cubeDimensions.contains(dim)){
 						cubeDimensions.add(dim);
-						aggregationSetCubeDimensions.put(cube, cubeDimensions);
-					}
+					}else{
+						//If ignore language
+						if(ignorelang){
+							//First en then everything else
+							if(dim.getLanguage().equals("en")){
+								cubeDimensions.remove(dim);
+								cubeDimensions.add(dim);
+							}
+						}else{
+							for(LDResource exisitingDim:cubeDimensions){
+								//Find the existing dimension that has the same URI (different language)
+								if(exisitingDim.equals(dim)){
+									//The new ldr has the preferred language
+									if(dim.getLanguage().equals(lang)){
+										cubeDimensions.remove(dim);
+										cubeDimensions.add(dim);
+									//The new ldr has the default language and the existing does 
+									//not have the preferred language
+									}else if (dim.getLanguage().equals(defaultlang)&&
+										!exisitingDim.getLanguage().equals(lang)){
+										cubeDimensions.remove(dim);
+										cubeDimensions.add(dim);
+									}
+								}
+							}
+						}
+					}				
+					aggregationSetCubeDimensions.put(cube, cubeDimensions);
 				}
-
 			}
 		} catch (QueryEvaluationException e) {
 			e.printStackTrace();
@@ -312,12 +323,9 @@ public class AggregationSPARQL {
 		Random rand = new Random();
 		long rnd = Math.abs(rand.nextLong());
 
-		String newDSD_URI = "<http://www.fluidops.com/resource/dsd_" + rnd
-				+ ">";
-		String newCube_URI = "<http://www.fluidops.com/resource/cube_" + rnd
-				+ ">";
-		String newCubeGraph_URI = "<http://www.fluidops.com/resource/graph_"
-				+ rnd + ">";
+		String newDSD_URI = "<http://www.fluidops.com/resource/dsd_" + rnd+ ">";
+		String newCube_URI = "<http://www.fluidops.com/resource/cube_" + rnd+ ">";
+		String newCubeGraph_URI = "<http://www.fluidops.com/resource/graph_"+ rnd + ">";
 
 		// Add new DSD
 		String create_new_dsd_query = "PREFIX qb: <http://purl.org/linked-data/cube#>"
@@ -351,10 +359,8 @@ public class AggregationSPARQL {
 			rnd = Math.abs(rand.nextLong());
 			String newComponentSpecification_URI = "<http://www.fluidops.com/resource/componentSpecification_"
 					+ rnd + ">";
-			create_new_dsd_query += newDSD_URI + " qb:component "
-					+ newComponentSpecification_URI + "."
-					+ newComponentSpecification_URI + " qb:measure <" + m.getURI()
-					+ ">.";
+			create_new_dsd_query += newDSD_URI + " qb:component "+ newComponentSpecification_URI + "."
+					+ newComponentSpecification_URI + " qb:measure <" + m.getURI()+ ">.";
 		}
 
 		// Attach Cube to Aggregation Set
@@ -461,8 +467,7 @@ public class AggregationSPARQL {
 				rnd = Math.abs(rand.nextLong());
 
 				// Observation URI
-				String newObservation_URI = "<http://www.fluidops.com/resource/observation_"
-						+ rnd + ">";
+				String newObservation_URI = "<http://www.fluidops.com/resource/observation_"+ rnd + ">";
 				create_new_cube_query += newObservation_URI
 						+ " rdf:type qb:Observation." + newObservation_URI
 						+ " qb:dataSet " + newCube_URI + ".";
@@ -475,12 +480,11 @@ public class AggregationSPARQL {
 						create_new_cube_query += newObservation_URI + " <"
 								+ ldr.getURI() + "> <" + dimValue + ">.";
 
-						// Is literal
+					// Is literal
 					} else {
 						create_new_cube_query += newObservation_URI + " <"
 								+ ldr.getURI() + "> \"" + dimValue + "\".";
 					}
-
 					i++;
 				}
 
