@@ -223,8 +223,10 @@ public class MapView extends AbstractWidget<MapView.Config> {
 						cp + "//cdn.leafletjs.com/leaflet-0.7.3/leaflet.js",
 						cp + "//rawgit.com/simogeo/geostats/master/lib/geostats.js",
 						cp + "//leaflet.github.io/Leaflet.heat/dist/leaflet-heat.js",
-						cp + "//www.mapquestapi.com/sdk/leaflet/v1.0/mq-map.js?key=Fmjtd%7Cluur2d0znu%2Cbl%3Do5-9a82dw",
-						cp + "//www.mapquestapi.com/sdk/leaflet/v1.0/mq-geocoding.js?key=Fmjtd%7Cluur2d0znu%2Cbl%3Do5-9a82dw");
+						cp + "//open.mapquestapi.com/sdk/leaflet/v1.0//mq-map.js?key=Fmjtd%7Cluur2d0znu%2Cbl%3Do5-9a82dw",
+						cp + "//open.mapquestapi.com/sdk/leaflet/v1.0/mq-geocoding.js?key=Fmjtd%7Cluur2d0znu%2Cbl%3Do5-9a82dw");
+					//	cp + "//www.mapquestapi.com/sdk/leaflet/v1.0/mq-map.js?key=Fmjtd%7Cluur2d0znu%2Cbl%3Do5-9a82dw",
+					//	cp + "//www.mapquestapi.com/sdk/leaflet/v1.0/mq-geocoding.js?key=Fmjtd%7Cluur2d0znu%2Cbl%3Do5-9a82dw");
    	}
 	
 	@Override
@@ -243,8 +245,7 @@ public class MapView extends AbstractWidget<MapView.Config> {
 
 		// The use code list parameter from the widget config
 		useCodeLists = config.useCodeLists;
-		
-		
+				
 		mapzoom = config.mapzoom;
 
 		if(mapzoom==null || mapzoom.equals("")){
@@ -859,7 +860,7 @@ public class MapView extends AbstractWidget<MapView.Config> {
 				@Override
 				public void onClick() {
 					String sliceURI = SliceSPARQL.createCubeSlice(cubeSliceURI,
-									cubeGraph,fixedDimensionsSelectedValues,sliceObservations);
+									cubeGraph,fixedDimensionsSelectedValues,sliceObservations,SPARQL_service);
 					String message = "A new slice with the following URI has been created:"
 							+ sliceURI;
 					FDialog.showMessage(this.getPage(),"New Slice created", message, "ok");

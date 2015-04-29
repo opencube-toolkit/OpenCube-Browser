@@ -4,24 +4,18 @@ import java.io.FileNotFoundException;
 import java.io.PrintWriter;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.HashSet;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
-import java.util.Set;
 
-import org.certh.opencube.SPARQL.AggregationSPARQL;
 import org.certh.opencube.SPARQL.CubeSPARQL;
 import org.certh.opencube.SPARQL.SelectionSPARQL;
-import org.certh.opencube.SPARQL.SliceSPARQL;
-import org.certh.opencube.aggregation.OrderedPowerSet;
-import org.certh.opencube.aggregation.AggregationSetCreator.Config;
+import org.certh.opencube.cubebrowser.DataCubeBrowserPlus;
+import org.certh.opencube.cubebrowser.DataCubeBrowserPlusPlus;
 import org.certh.opencube.utils.CubeHandlingUtils;
 import org.certh.opencube.utils.LDResource;
 
 import com.fluidops.ajax.components.FButton;
-import com.fluidops.ajax.components.FCheckBox;
 import com.fluidops.ajax.components.FComboBox;
 import com.fluidops.ajax.components.FComponent;
 import com.fluidops.ajax.components.FContainer;
@@ -30,14 +24,9 @@ import com.fluidops.ajax.components.FGrid;
 import com.fluidops.ajax.components.FHTML;
 import com.fluidops.ajax.components.FLabel;
 import com.fluidops.ajax.components.FRadioButtonGroup;
-import com.fluidops.ajax.components.FRadioButtonGroup.FRadioButton;
-import com.fluidops.ajax.components.FTree;
-import com.fluidops.ajax.components.FTreeTable;
-import com.fluidops.ajax.models.FTreeModel;
 import com.fluidops.iwb.datacatalog.widget.DataCubeTreeResultWidget;
 import com.fluidops.iwb.model.ParameterConfigDoc;
 import com.fluidops.iwb.model.TypeConfigDoc;
-import com.fluidops.iwb.util.IWBConfigClassLocator;
 import com.fluidops.iwb.widget.AbstractWidget;
 import com.fluidops.iwb.widget.config.WidgetBaseConfig;
 
@@ -63,15 +52,13 @@ public class CubeSelection extends AbstractWidget<CubeSelection.Config> {
 	private FContainer cubeContainer = new FContainer("cubeContainer");
 
 	// The container to show the available cube dimensions
-	private FContainer dimensionsContainer = new FContainer(
-			"dimensionsContainer");
+	private FContainer dimensionsContainer = new FContainer("dimensionsContainer");
 
 	// The container to show the available cube measures
 	private FContainer measuresContainer = new FContainer("measuresContainer");
 
 	// The container to show the available operations
-	private FContainer operationsContainer = new FContainer(
-			"operationsContainer");
+	private FContainer operationsContainer = new FContainer("operationsContainer");
 
 	// The left container
 	private FContainer leftContainer = new FContainer("leftContainer");
@@ -131,6 +118,8 @@ public class CubeSelection extends AbstractWidget<CubeSelection.Config> {
 	private FComboBox operations_combo;
 
 	private String selectedOperation = null;
+	
+	private boolean searchButtonPressed=false;
 
 	public static class Config extends WidgetBaseConfig {
 		@ParameterConfigDoc(desc = "SPARQL service to forward queries", required = false)
@@ -188,7 +177,7 @@ public class CubeSelection extends AbstractWidget<CubeSelection.Config> {
 		cubeContainer.addStyle("border-color", "#C8C8C8 ");
 		cubeContainer.addStyle("display", "table-cell ");
 		cubeContainer.addStyle("vertical-align", "middle ");
-		cubeContainer.addStyle("width", "400px ");
+		cubeContainer.addStyle("width", "500px ");
 		cubeContainer.addStyle("margin-left", "auto");
 		cubeContainer.addStyle("margin-right", "auto");
 		cubeContainer.addStyle("text-align", "left");
@@ -239,8 +228,7 @@ public class CubeSelection extends AbstractWidget<CubeSelection.Config> {
 											ignoreLang, SPARQL_Service);
 
 							cubeMeasures.clear();
-							cubeMeasures
-									.put(selectedCube, selectedCubeMeasures);
+							cubeMeasures.put(selectedCube, selectedCubeMeasures);
 						}
 					});
 
@@ -301,24 +289,32 @@ public class CubeSelection extends AbstractWidget<CubeSelection.Config> {
 
 					compatibleAddValue2Level = new HashMap<LDResource, List<LDResource>>();
 					addAttributeValue = false;
+					
+					//DEFAUL PRESELECTED OPERATION
 					selectedOperation = null;
+					//selectedOperation = null;
 
 					populateCentralContainer();
 
 					long totalstopTime = System.currentTimeMillis();
 					long totalelapsedTime = totalstopTime - totalstartTime;
-					System.out.println("Load selection time: "
-							+ totalelapsedTime);
+					System.out.println("Load selection time: "+ totalelapsedTime);
 				}
 			};
 
+		
+			
+			
 			// populate cubes combo box
 			for (LDResource cube : allCubesAndDimCount.keySet()) {
-				if (cube.getLabel() != null) {
-					cubesCombo.addChoice(cube.getLabel(), cube);
-				} else {
-					cubesCombo.addChoice(cube.getURI(), cube);
-				}
+			//	if(!cube.getURI().contains("http://www.fluidops.com/resource/cube_")
+				//		  && !cube.getURI().contains("http://www.fluidops.com/resource/slice_")){
+					  if (cube.getLabel() != null) {
+						   cubesCombo.addChoice(cube.getLabel(), cube);
+					  }// else {
+						//  cubesCombo.addChoice(cube.getURI(), cube); 
+					//  }
+			//	}
 			}
 
 			if (selectedCubeURI != null) {
@@ -345,12 +341,12 @@ public class CubeSelection extends AbstractWidget<CubeSelection.Config> {
 			dimensionsContainer.addStyle("border-color", "#C8C8C8 ");
 			dimensionsContainer.addStyle("display", "table-cell ");
 			dimensionsContainer.addStyle("vertical-align", "middle ");
-			dimensionsContainer.addStyle("width", "400px ");
+			dimensionsContainer.addStyle("width", "500px ");
 			dimensionsContainer.addStyle("margin-left", "auto");
 			dimensionsContainer.addStyle("margin-right", "auto");
 			dimensionsContainer.addStyle("text-align", "left");
 
-			String dimensions_label_str = "<b>Cube dimensions/levels:</b><br><ol>";
+		/*	String dimensions_label_str = "<b>Cube dimensions/levels:</b><br><ol>";
 
 			for (LDResource dim : cubeDimensions) {
 				if (dimensionsLevels.get(dim).size() > 0) {
@@ -373,8 +369,10 @@ public class CubeSelection extends AbstractWidget<CubeSelection.Config> {
 			dimensions_label_str += "</ol>";
 			FLabel dimensions_label = new FLabel("dimensions_label",
 					dimensions_label_str);
-			dimensionsContainer.add(dimensions_label);
+			dimensionsContainer.add(dimensions_label);*/
 
+			//ADD TREE RESULT WIDGTET -- DEN DOULEBEI ME TO BUILD SOLUTION
+			
 			DataCubeTreeResultWidget treeWidget = new DataCubeTreeResultWidget();
 			treeWidget.setPageContext(pc);
 			DataCubeTreeResultWidget.Config treeWidgetConfig = treeWidget.get();
@@ -383,28 +381,24 @@ public class CubeSelection extends AbstractWidget<CubeSelection.Config> {
 			treeWidgetConfig.query = "PREFIX  qb: <http://purl.org/linked-data/cube#> "
 					+ "SELECT DISTINCT ?parent ?child "
 					+ "WHERE {"
-					+ "GRAPH <"
-					+ cubeGraph
-					+ ">{"
+					+ "GRAPH <"	+ cubeGraph	+ ">{"
 					+ selectedCubeURI
 					+ " qb:structure ?structure}"
-					+ "GRAPH <"
-					+ cubeDSDGraph
-					+ ">{ "
+					+ "GRAPH <"	+ cubeDSDGraph+ ">{ "
 					+ "?structure qb:component ?component ."
-					+ "?component qb:dimension ?parent}"
-					+ "GRAPH <"
-					+ cubeGraph
-					+ ">{"
-					+ "?x qb:dataSet "
-					+ selectedCubeURI
-					+ ". " + "?x ?parent ?child. }}";
+					+ "?component qb:dimension ?parent." 
+					+ "}"
+					+ "GRAPH <"	+ cubeGraph	+ ">{"
+					+ "?x qb:dataSet "+ selectedCubeURI+ ". " 
+					+ "?x ?parent ?child. }}";
 			System.out.println(treeWidgetConfig.query);
 			treeWidgetConfig.asynch = true;
 			treeWidget.setConfig(treeWidgetConfig);
 			dimensionsContainer.add(treeWidget.getComponentUAE("myid"));
 		}
 
+
+				
 		if (cubeMeasures.size() > 0) {
 
 			// cube container styling
@@ -415,7 +409,7 @@ public class CubeSelection extends AbstractWidget<CubeSelection.Config> {
 			measuresContainer.addStyle("border-color", "#C8C8C8 ");
 			measuresContainer.addStyle("display", "table-cell ");
 			measuresContainer.addStyle("vertical-align", "middle ");
-			measuresContainer.addStyle("width", "400px ");
+			measuresContainer.addStyle("width", "500px ");
 			measuresContainer.addStyle("margin-left", "auto");
 			measuresContainer.addStyle("margin-right", "auto");
 			measuresContainer.addStyle("text-align", "left");
@@ -443,22 +437,23 @@ public class CubeSelection extends AbstractWidget<CubeSelection.Config> {
 			operationsContainer.addStyle("border-color", "#C8C8C8 ");
 			operationsContainer.addStyle("display", "table-cell ");
 			operationsContainer.addStyle("vertical-align", "middle ");
-			operationsContainer.addStyle("width", "400px ");
+			operationsContainer.addStyle("width", "500px ");
 			operationsContainer.addStyle("margin-left", "auto");
 			operationsContainer.addStyle("margin-right", "auto");
 			operationsContainer.addStyle("text-align", "left");
 
 			FLabel operations_label = new FLabel("operations_label",
-					"<b>Please select an operation:<b>");
+					"<b>Select an operation:<b>");
 
 			operationsContainer.add(operations_label);
+			operationsContainer.add(getNewLineComponent());
 
 			// Add Combo box for language selection
 			operations_combo = new FComboBox("operations_combo") {
 				@Override
 				public void onChange() {
 					selectedOperation = this.getSelected().get(0).toString();
-					if (selectedOperation.equals("Add value to level")) {
+					if (selectedOperation.equals("Add value to dimension")) {
 						addAttributeValue = true;
 						cubeContainer.removeAll();
 						dimensionsContainer.removeAll();
@@ -484,20 +479,23 @@ public class CubeSelection extends AbstractWidget<CubeSelection.Config> {
 				}
 			};
 
-			operations_combo.addChoice("Add dimension");
+			//operations_combo.addChoice("Add dimension");
 			operations_combo.addChoice("Add measure");
-			operations_combo.addChoice("Add level to dimension");
-			operations_combo.addChoice("Change hierarchy to level");
-			operations_combo.addChoice("Add value to level");
-			operations_combo.addChoice("Run cluster experiment");
+			//operations_combo.addChoice("Add level to dimension");
+			//operations_combo.addChoice("Change hierarchy to level");
+			operations_combo.addChoice("Add value to dimension");
+			//operations_combo.addChoice("Run cluster experiment");
 
 			if (selectedOperation != null) {
 				operations_combo.setPreSelected(selectedOperation);
-				if (selectedOperation.equals("Add value to level")) {
+				if (selectedOperation.equals("Add value to dimension")) {
 					addAttributeValue = true;
 				}
+			}else{
+				operations_combo.setPreSelected("Add measure");
 			}
 
+			//DO NOT SHOW THE OPERATIONS COMBO BOX
 			operationsContainer.add(operations_combo);
 
 			if (addAttributeValue) {
@@ -506,27 +504,31 @@ public class CubeSelection extends AbstractWidget<CubeSelection.Config> {
 						"expansionDimension_combo") {
 					@Override
 					public void onChange() {
-						selectedDimension = (LDResource) this.getSelected()
-								.get(0);
+						selectedDimension = (LDResource) this.getSelected().get(0);
 					}
 				};
 
 				for (LDResource ldr : cubeDimensions) {
-					expansionDimension_combo
-							.addChoice(ldr.getURIorLabel(), ldr);
+					expansionDimension_combo.addChoice(ldr.getURIorLabel(), ldr);
 				}
-
+				
+				if(selectedDimension==null){
+					selectedDimension=cubeDimensions.get(0);
+				}
+				expansionDimension_combo.setPreSelected(selectedDimension);
+			
+				
+				
 				operationsContainer.add(getNewLineComponent());
 				operationsContainer.add(getNewLineComponent());
 				operationsContainer.add(expansionDimension_combo);
 			}
 
-			FButton executeOperation_button = new FButton("executeOperation",
-					"Execute operation") {
+			FButton executeOperation_button = new FButton("executeOperation","Search...") {
 				@Override
 				public void onClick() {
-					String selectedOperation = operations_combo.getSelected()
-							.get(0).toString();
+					searchButtonPressed=true;
+					String selectedOperation = operations_combo.getSelected().get(0).toString();
 					compatibleAddValue2Level = new HashMap<LDResource, List<LDResource>>();
 					addAttributeValue = false;
 					if (selectedOperation.equals("Add measure")) {
@@ -535,7 +537,7 @@ public class CubeSelection extends AbstractWidget<CubeSelection.Config> {
 
 						// get measure compatible cubes and measures - without
 						// the selected cube
-						HashMap<LDResource, List<LDResource>> compatible = SelectionSPARQL
+						/* HashMap<LDResource, List<LDResource>> compatible = SelectionSPARQL
 								.getMeasureCompatibleCubes(selectedCube,
 										cubeGraph, cubeDSDGraph,
 										allCubesAndDimCount, cubeDimensions,
@@ -544,7 +546,13 @@ public class CubeSelection extends AbstractWidget<CubeSelection.Config> {
 										cubeMeasures.get(selectedCube), 1,
 										selectedLanguage, defaultLang,
 										ignoreLang, SPARQL_Service);
-
+						 */
+						
+						HashMap<LDResource, List<LDResource>> compatible=
+								SelectionSPARQL.getLinkAddMeasureCompatibleCubes(
+										selectedCube, cubeGraph, cubeDSDGraph,
+										 selectedLanguage,
+										defaultLang, ignoreLang, SPARQL_Service);
 						List<LDResource> selectedCubeMeasures = cubeMeasures
 								.get(selectedCube);
 
@@ -570,30 +578,8 @@ public class CubeSelection extends AbstractWidget<CubeSelection.Config> {
 						long elapsedTime = stopTime - startTime;
 						System.out.println("Add measure time: " + elapsedTime);
 
-					} else if (selectedOperation.equals("Add value to level")) {
+					} else if (selectedOperation.equals("Add value to dimension")) {
 						long startTime = System.currentTimeMillis();
-
-						/*
-						 * int ie = SelectionSPARQL
-						 * .linkAddValueToLevelCompatibleCubes( selectedCube,
-						 * cubeGraph, cubeDSDGraph, allCubesAndDimCount,
-						 * cubeDimensions, dimensionsLevels,
-						 * cubeMeasures.get(selectedCube),
-						 * dimensionsConceptSchemes, selectedDimension, 1.0,
-						 * selectedLanguage, defaultLang, ignoreLang,
-						 * SPARQL_Service);
-						 */
-
-						/*
-						 * compatibleAddValue2Level=SelectionSPARQL
-						 * .getAddValueToLevelCompatibleCubes( selectedCube,
-						 * cubeGraph, cubeDSDGraph, allCubesAndDimCount,
-						 * cubeDimensions, dimensionsLevels,
-						 * cubeMeasures.get(selectedCube),
-						 * dimensionsConceptSchemes, selectedDimension, 1.0,
-						 * selectedLanguage, defaultLang, ignoreLang,
-						 * SPARQL_Service);
-						 */
 
 						compatibleAddValue2Level = SelectionSPARQL
 								.getLinkAddValueToLevelCompatibleCubes(
@@ -616,8 +602,7 @@ public class CubeSelection extends AbstractWidget<CubeSelection.Config> {
 						System.out.println("Add value to level time: "
 								+ elapsedTime);
 
-					} else if (selectedOperation
-							.equals("Run cluster experiment")) {
+					} else if (selectedOperation.equals("Run cluster experiment")) {
 						long startTime = System.currentTimeMillis();
 
 						HashMap<LDResource, HashMap<LDResource, List<LDResource>>> clusterCubesAndDims = SelectionSPARQL
@@ -638,8 +623,7 @@ public class CubeSelection extends AbstractWidget<CubeSelection.Config> {
 							e2.printStackTrace();
 						}
 
-						for (LDResource cubeToCheck : clusterCubesAndDims
-								.keySet()) {
+						for (LDResource cubeToCheck : clusterCubesAndDims.keySet()) {
 
 							selectedCube = cubeToCheck;
 							selectedCubeURI = "<" + cubeToCheck.getURI() + ">";
@@ -843,7 +827,9 @@ public class CubeSelection extends AbstractWidget<CubeSelection.Config> {
 
 		// Add attribute value
 		// Show new attribute values per dimension
-		if (compatibleAddValue2Level.keySet().size() > 0) {
+		if (compatibleAddValue2Level.keySet().size() > 0 &&
+				operations_combo.getSelected().get(0).toString().
+				equals("Add value to dimension") ) {
 
 			rightContainer.addStyle("border-style", "solid");
 			rightContainer.addStyle("border-width", "1px");
@@ -865,12 +851,22 @@ public class CubeSelection extends AbstractWidget<CubeSelection.Config> {
 
 			addMeasuresAttributeValues_radioButtonGroup = new FRadioButtonGroup(
 					"compAttributeValuesRadio");
+			int i=1;
 			for (LDResource compCube : compatibleAddValue2Level.keySet()) {
 				// show the dimension values only of compatible cubes
 				if (!compCube.equals(selectedCube)) {
 					String compCubeAttributeValues_str = "<b>"
-							+ compCube.getURI() + "</b>";
+							+ compCube.getURIorLabel() + "</b><br>";
 
+					compCubeAttributeValues_str+="<a id=\"show_id"+i+"\" " +
+							"onclick=\"document.getElementById('spoiler_id"+i+"').style.display=''; " +
+							"document.getElementById('show_id"+i+"').style.display='none';\" " +
+							"class=\"link\">[Show dimension values]</a>" +
+							"<span id=\"spoiler_id"+i+"\" style=\"display: none\">" +
+							"<a onclick=\"document.getElementById('spoiler_id"+i+"').style.display='none';" +
+							" document.getElementById('show_id"+i+"').style.display='';\"" +
+							" class=\"link\">[Hide dimension values]</a><br>";
+					
 					// show the measures of the compatible cubes
 					compCubeAttributeValues_str += "<ol>";
 					for (LDResource compAttributeValue : compatibleAddValue2Level
@@ -879,116 +875,63 @@ public class CubeSelection extends AbstractWidget<CubeSelection.Config> {
 								+ compAttributeValue.getURIorLabel() + "</li>";
 					}
 					compCubeAttributeValues_str += "</ol><br>";
+					
+					compCubeAttributeValues_str+="</span>";					
+					
+					
+					
 					addMeasuresAttributeValues_radioButtonGroup.addRadioButton(
 							compCubeAttributeValues_str, compCube.getURI());
+					i++;
 				}
 			}
 
+			//By default checked the 1st button
 			rightContainer.add(addMeasuresAttributeValues_radioButtonGroup);
+			
+			
+			rightContainer.add(getNewLineComponent());
 
 			// //////////////////////////////
 			FButton mergeAttributeValuesCubes_button = new FButton(
-					"mergeAttributeValueCubes", "Add attribute values") {
+					"mergeAttributeValueCubes", "Expand cube") {
 				@Override
 				public void onClick() {
-					LDResource expanderCube = new LDResource(
-							addMeasuresAttributeValues_radioButtonGroup.checked.value);
-					String mergedCubeURI = SelectionSPARQL
-							.mergeCubesAddAttributeValue(selectedCube,
-									expanderCube, selectedDimension,
-									selectedLanguage, defaultLang, ignoreLang,
-									SPARQL_Service);
-
-					String message = "A new merged cube with the following URI has been created: "
-							+ mergedCubeURI;
-					message = message.replaceAll("<", "");
-					message = message.replaceAll(">", "");
-
-					FDialog.showMessage(this.getPage(),
-							"New merged cube created", message, "ok");
-
+					//a cube is selected for expansion
+					if(addMeasuresAttributeValues_radioButtonGroup.checked!=null){
+						LDResource expanderCube = new LDResource(
+								addMeasuresAttributeValues_radioButtonGroup.checked.value);
+						
+						DataCubeBrowserPlusPlus browserPlus = new DataCubeBrowserPlusPlus();
+						browserPlus.setPageContext(pc);
+						DataCubeBrowserPlusPlus.Config browserPlusConfig = browserPlus.get();
+						//browserPlusConfig.
+						
+						
+						browserPlusConfig.asynch = true;
+						browserPlusConfig.dataCubeURIs="<"+selectedCube.getURI()+">,<"+
+								expanderCube.getURI()+">";
+						browserPlus.setConfig(browserPlusConfig);
+						cnt.removeAll();
+						cnt.add(browserPlus.getComponentUAE("myid"));					
+						cnt.populateView();
+					}	
+					
 				}
 			};
 
 			rightContainer.add(mergeAttributeValuesCubes_button);
-			/*
-			 * FLabel addValue2Level_label = new
-			 * FLabel("addValue2Level_label","<b>Available dimensions' values:<b>"
-			 * );
-			 * 
-			 * rightContainer.add(addValue2Level_label);
-			 * 
-			 * HashMap<LDResource,List<LDResource>> compatibleDimensionValues=
-			 * new HashMap<LDResource, List<LDResource>>();
-			 * 
-			 * for(LDResource cube:compatibleAddValue2Level.keySet()){
-			 * 
-			 * List<LDResource> cubeDimValue=compatibleAddValue2Level.get(cube);
-			 * 
-			 * for(LDResource dim:cubeDimValue.keySet()){ List<LDResource>
-			 * dimValues=cubeDimValue.get(dim); List<LDResource>
-			 * existingDimValues=compatibleDimensionValues.get(dim);
-			 * 
-			 * //No existing dim values if(existingDimValues==null){
-			 * compatibleDimensionValues.put(dim, dimValues); }else{
-			 * HashSet<LDResource> valuesSet=new HashSet<LDResource>(dimValues);
-			 * valuesSet.addAll(existingDimValues); List<LDResource>
-			 * mergedValues=new ArrayList<LDResource>(valuesSet);
-			 * compatibleDimensionValues.put(dim, mergedValues); } } } int
-			 * compatibleDimCount=1; for(LDResource
-			 * dim:compatibleDimensionValues.keySet() ){ FLabel dim_Label = new
-			 * FLabel("compatibleDim_label"+compatibleDimCount,
-			 * "<b>"+dim.getURIorLabel()+"</b>"); rightContainer.add(dim_Label);
-			 * compatibleDimCount++;
-			 * 
-			 * List<LDResource> values=compatibleDimensionValues.get(dim);
-			 * for(LDResource v:values){ String
-			 * value_label_str=v.getURIorLabel();
-			 * if(value_label_str.length()>40){
-			 * value_label_str=value_label_str.substring(0,40)+"..."; }
-			 * value_label_str+=" (<i>";
-			 * 
-			 * for(LDResource cube:compatibleAddValue2Level.keySet()){
-			 * 
-			 * HashMap<LDResource, List<LDResource>>
-			 * cubeDimValue=compatibleAddValue2Level.get(cube);
-			 * 
-			 * for(LDResource cubeDim:cubeDimValue.keySet()){ List<LDResource>
-			 * dimValues=cubeDimValue.get(cubeDim); if(dimValues.contains(v)){
-			 * value_label_str+=cube.getURIorLabel()+", "; } } }
-			 * 
-			 * value_label_str=value_label_str.substring(0,value_label_str.length
-			 * ()-2); value_label_str+="</i>)";
-			 * 
-			 * // show one check box for each cube dimension FCheckBox
-			 * valueCheckBox = new FCheckBox("valueCheckBox"+compatibleDimCount,
-			 * value_label_str);
-			 * 
-			 * LDResource tmp=new LDResource((selectedCubeURI.substring(1,
-			 * selectedCubeURI.length()-1)));
-			 * 
-			 * if(value_label_str.contains(tmp.getURIorLabel())){
-			 * valueCheckBox.setChecked(true); valueCheckBox.setEnabled(false);
-			 * }
-			 * 
-			 * //Add Dimension value -> checkBox at map
-			 * mapValueURIcheckBox.put(v, valueCheckBox);
-			 * rightContainer.add(valueCheckBox); compatibleDimCount++; } }
-			 */
+			
 			// Add measure operator
 			// There exist new cube - measures to add
-		} else if (cubeMeasures.keySet().size() > 1) {
+		} else if (cubeMeasures.keySet().size() > 1 &&
+				operations_combo.getSelected().get(0).toString().equals("Add measure")) {
 			rightContainer.addStyle("border-style", "solid");
 			rightContainer.addStyle("border-width", "1px");
 			rightContainer.addStyle("padding", "10px");
 			rightContainer.addStyle("border-radius", "5px");
 			rightContainer.addStyle("border-color", "#C8C8C8 ");
-			rightContainer.addStyle("display", "table-cell ");
-			rightContainer.addStyle("vertical-align", "middle ");
-			rightContainer.addStyle("margin-left", "auto");
-			rightContainer.addStyle("margin-right", "auto");
-			rightContainer.addStyle("text-align", "left");
-
+		
 			FLabel addMeasure_label = new FLabel("addMeasure_label",
 					"<b>Available measures to add:<b>");
 			rightContainer.add(addMeasure_label);
@@ -998,7 +941,7 @@ public class CubeSelection extends AbstractWidget<CubeSelection.Config> {
 			for (LDResource compCube : cubeMeasures.keySet()) {
 				// show the measures only of compatible cubes
 				if (!compCube.equals(selectedCube)) {
-					String compCubeMeasures = "<b>" + compCube.getURI()
+					String compCubeMeasures = "<b>" + compCube.getURIorLabel()
 							+ "</b>";
 
 					// show the measures of the compatible cubes
@@ -1015,26 +958,46 @@ public class CubeSelection extends AbstractWidget<CubeSelection.Config> {
 			}
 			rightContainer.add(addMeasuresAttributeValues_radioButtonGroup);
 
-			FButton mergeMeasureCubes_button = new FButton("mergeMeasureCubes",
-					"Add measures") {
+			FButton mergeMeasureCubes_button = new FButton("mergeMeasureCubes","Add measures") {
 				@Override
 				public void onClick() {
-					LDResource expanderCube = new LDResource(
-							addMeasuresAttributeValues_radioButtonGroup.checked.value);
-					String mergedCubeURI = SelectionSPARQL
-							.mergeCubesAddMeasure(selectedCube, expanderCube,
-									selectedLanguage, defaultLang, ignoreLang,
-									SPARQL_Service);
-
-					String message = "A new merged cube with the following URI has been created: "
-							+ mergedCubeURI;
-
-					FDialog.showMessage(this.getPage(),
-							"New merged cube created", message, "ok");
+					if(addMeasuresAttributeValues_radioButtonGroup.checked!=null){
+						LDResource expanderCube = new LDResource(
+								addMeasuresAttributeValues_radioButtonGroup.checked.value);
+						
+						DataCubeBrowserPlusPlus browserPlus = new DataCubeBrowserPlusPlus();
+						browserPlus.setPageContext(pc);
+						DataCubeBrowserPlusPlus.Config browserPlusConfig = browserPlus.get();
+						//browserPlusConfig.
+						
+						
+						browserPlusConfig.asynch = true;
+						browserPlusConfig.dataCubeURIs="<"+selectedCube.getURI()+">,<"+
+								expanderCube.getURI()+">";
+						browserPlus.setConfig(browserPlusConfig);
+						cnt.removeAll();
+						cnt.add(browserPlus.getComponentUAE("myid"));					
+						cnt.populateView();					
+					}				
 				}
 			};
 
 			rightContainer.add(mergeMeasureCubes_button);
+		}else if(searchButtonPressed){
+
+			rightContainer = new FContainer("rightContainer");
+			rightContainer.addStyle("padding", "10px");
+			rightContainer.addStyle("display", "table-cell ");
+			rightContainer.addStyle("vertical-align", "middle ");
+			rightContainer.addStyle("margin-left", "auto");
+			rightContainer.addStyle("margin-right", "auto");
+			rightContainer.addStyle("text-align", "left");
+
+			FLabel noResultsFound = new FLabel(
+					"noResultsFound_label",
+					"<b>No results found <b>");
+			rightContainer.add(noResultsFound);
+						
 		}
 
 		// Left FGrid
@@ -1058,21 +1021,32 @@ public class CubeSelection extends AbstractWidget<CubeSelection.Config> {
 
 		// Add grid to left container
 		leftContainer.add(selectionGrid);
+		
+		FContainer leftContainerOut=new FContainer("leftContainerOut");
+		leftContainerOut.addStyle("height", "10000px");
+		leftContainerOut.add(leftContainer);
 
 		// Total FGrid
 		FGrid totalGrid = new FGrid("totalGrid");
 		ArrayList<FComponent> totalFarray = new ArrayList<FComponent>();
-		totalFarray.add(leftContainer);
+		totalFarray.add(leftContainerOut);
 
-		if (compatibleAddValue2Level.keySet().size() > 0
-				|| cubeMeasures.keySet().size() > 1) {
-			totalFarray.add(rightContainer);
+		if (compatibleAddValue2Level.keySet().size() > 0|| cubeMeasures.keySet().size() > 1||
+				searchButtonPressed) {
+			FContainer rightContainerOut=new FContainer("rightContainerOut");
+			rightContainerOut.addStyle("height", "10000px");
+			rightContainerOut.add(rightContainer);
+			
+			totalFarray.add(rightContainerOut);
+			if(searchButtonPressed){
+				searchButtonPressed=false;
+			}
 		}
 
 		totalGrid.addRow(totalFarray);
 
 		cnt.add(totalGrid);
-
+		
 		// If this is not the first load of the widget
 		if (!isFirstLoad) {
 			cnt.populateView();

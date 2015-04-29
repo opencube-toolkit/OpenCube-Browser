@@ -175,6 +175,10 @@ public class LinkCreator extends AbstractWidget<LinkCreator.Config> {
 				@Override
 				public void onClick() {
 
+					// populate cubes combo box
+					for (LDResource cube : allCubesAndDimCount.keySet()) {
+					selectedCube=cube;
+					selectedCubeURI = "<" + cube.getURI() + ">";
 					// Get Cube/Slice Graph
 					cubeGraph = CubeSPARQL.getCubeSliceGraph(selectedCubeURI,
 							SPARQL_Service);
@@ -273,16 +277,23 @@ public class LinkCreator extends AbstractWidget<LinkCreator.Config> {
 									dimensionsLevels, dimensionsConceptSchemes,
 									cubeMeasures, 1.0, selectedLanguage,
 									defaultLang, ignoreLang, SPARQL_Service);
-
+					
+					System.out.println("Links have been created for cube "
+							+ selectedCube.getURI()	+ ". Add value to level links: "
+							+ numberOfLinksAddValueToLevel
+							+ ". Add measure links: "
+							+ numberOfLinksAddMeasure + ".");
+					}
 					FDialog.showMessage(
 							this.getPage(),
 							"Links created",
 							"Links have been created for cube "
 									+ selectedCube.getURI()
 									+ ". Add value to level links: "
-									+ numberOfLinksAddValueToLevel
+						//			+ numberOfLinksAddValueToLevel
 									+ ". Add measure links: "
-									+ numberOfLinksAddMeasure + ".", "ok");
+								//	+ numberOfLinksAddMeasure + "."
+									,"ok");
 				}
 
 			};

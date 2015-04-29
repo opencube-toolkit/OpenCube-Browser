@@ -313,7 +313,7 @@ public class SliceCreator extends AbstractWidget<SliceCreator.Config> {
 					
 					//create new slice
 					String sliceURI = SliceSPARQL.createCubeSlice(cubeURI, cubeGraph,
-							fixedDimensionsSelectedValues,	sliceObservations);
+							fixedDimensionsSelectedValues,	sliceObservations,SPARQL_service);
 					
 					String message = "A new slice with the following URI has been created: "+ sliceURI;
 

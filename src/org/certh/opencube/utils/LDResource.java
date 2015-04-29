@@ -63,7 +63,7 @@ public class LDResource implements Comparable {
 		if(labelLiteral!=null){
 			return labelLiteral.getLanguage();
 		}else{
-			return null;
+			return "";
 		}
 	}
 
@@ -75,6 +75,17 @@ public class LDResource implements Comparable {
 				!labelLiteral.getLabel().equals("")) {
 			return labelLiteral.getLabel();			
 		} else if (URI.contains("#")) {
+			return URI.substring(URI.lastIndexOf("#") + 1, URI.length());
+		} else {
+			return URI.substring(URI.lastIndexOf("/") + 1, URI.length());
+		}
+
+	}
+	
+	// If label exists return the label
+	// else return the last part of the URI (either after last '#' or after last '/')
+	public String getLastPartOfURI()  {
+		if (URI.contains("#")) {
 			return URI.substring(URI.lastIndexOf("#") + 1, URI.length());
 		} else {
 			return URI.substring(URI.lastIndexOf("/") + 1, URI.length());

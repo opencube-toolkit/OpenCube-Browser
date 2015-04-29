@@ -1,10 +1,14 @@
 package org.certh.opencube.cubebrowser;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Random;
+import java.util.Set;
 
 import org.certh.opencube.SPARQL.AggregationSPARQL;
 import org.certh.opencube.SPARQL.CubeBrowserSPARQL;
@@ -53,11 +57,13 @@ import com.fluidops.util.Pair;
 
 @TypeConfigDoc("The OpenCube browser enables the exploration of an RDF Data Cube"
 		+ " by presenting each time a two-dimensional slice of the cube as a table.")
-public class DataCubeBrowser extends AbstractWidget<DataCubeBrowser.Config> {
+public class DataCubeBrowserPlus extends
+		AbstractWidget<DataCubeBrowserPlus.Config> {
 
 	// The top container to show the check boxes with the available aggregation
 	// set dimensions
-	private FContainer selectCubeContainer = new FContainer("selectCubeContainer");
+	private FContainer selectCubeContainer = new FContainer(
+			"selectCubeContainer");
 
 	// The top container to show the check boxes with the available aggregation
 	// set dimensions
@@ -104,7 +110,7 @@ public class DataCubeBrowser extends AbstractWidget<DataCubeBrowser.Config> {
 	// All the cube observations - to be used to create a slice
 	private List<LDResource> sliceObservations = new ArrayList<LDResource>();
 
-	// A map (dimension URI - dimension values) with all the cube dimension
+	// A map (cube - dimension URI - dimension values) with all cube dimension
 	// values
 	private HashMap<LDResource, List<LDResource>> allDimensionsValues = new HashMap<LDResource, List<LDResource>>();
 
@@ -128,7 +134,7 @@ public class DataCubeBrowser extends AbstractWidget<DataCubeBrowser.Config> {
 	private HashMap<LDResource, FCheckBox> mapMeasureURIcheckBox = new HashMap<LDResource, FCheckBox>();
 
 	// The cube URI to visualize (required)
-	private String cubeSliceURI = "";
+	private List<String> cubeSliceURIs = new ArrayList<String>();
 
 	// The SPARQL service to get data (not required)
 	private String SPARQL_service = "";
@@ -137,13 +143,13 @@ public class DataCubeBrowser extends AbstractWidget<DataCubeBrowser.Config> {
 	private String defaultLang;
 
 	// The graph of the cube
-	private String cubeGraph = null;
+	private HashMap<String, String> cubeGraphs = new HashMap<String, String>();
 
 	// The graph of the cube structure
-	private String cubeDSDGraph = null;
+	private HashMap<String, String> cubeDSDGraphs = new HashMap<String, String>();
 
 	// The graph of the slice
-	private String sliceGraph = null;
+	private HashMap<String, String> sliceGraphs = new HashMap<String, String>();
 
 	// The table model for visualization of the cube
 	private FTable ftable = new FTable("ftable");
@@ -153,6 +159,8 @@ public class DataCubeBrowser extends AbstractWidget<DataCubeBrowser.Config> {
 
 	// True if URI is type qb:Slice
 	private boolean isSlice;
+
+	private HashMap<String, String> allCubeSliceTypes = new HashMap<String, String>();
 
 	// True if code list will be used to get the cube dimension values
 	private boolean useCodeLists;
@@ -164,7 +172,7 @@ public class DataCubeBrowser extends AbstractWidget<DataCubeBrowser.Config> {
 	private FContainer cnt = null;
 
 	// The available languages of the cube
-	private List<String> availableLanguages;
+	private List<String> availableLanguages = new ArrayList<String>();
 
 	// The selected language
 	private String selectedLanguage;
@@ -179,9 +187,11 @@ public class DataCubeBrowser extends AbstractWidget<DataCubeBrowser.Config> {
 	private String[] measureColors = { "black", "CornflowerBlue", "LimeGreen", "Tomato",
 			"Orchid","MediumVioletRed","Gold","DarkGoldenRod","DarkGray","DarkRed" };
 
+	private String cubeSliceURI = "";
+
 	public static class Config extends WidgetBaseConfig {
 		@ParameterConfigDoc(desc = "The data cube URI to visualise", required = true)
-		public String dataCubeURI;
+		public String dataCubeURIs;
 
 		@ParameterConfigDoc(desc = "Use code lists to get dimension values", required = false)
 		public boolean useCodeLists;
@@ -205,7 +215,8 @@ public class DataCubeBrowser extends AbstractWidget<DataCubeBrowser.Config> {
 		cnt = new FContainer(id);
 
 		// Get the cube URI from the widget configuration
-		cubeSliceURI = config.dataCubeURI;
+		cubeSliceURIs = Arrays.asList(config.dataCubeURIs.split("\\s*,\\s*"));
+		// cubeSliceURIs = config.dataCubeURIs;
 
 		// Get the SPARQL service (if any) from the cube configuration
 		SPARQL_service = config.sparqlService;
@@ -226,7 +237,8 @@ public class DataCubeBrowser extends AbstractWidget<DataCubeBrowser.Config> {
 			selectedLanguage = defaultLang;
 		}
 
-		allCubes = SelectionSPARQL.getAllAvailableCubesAndSlices(SPARQL_service);
+		allCubes = SelectionSPARQL
+				.getAllAvailableCubesAndSlices(SPARQL_service);
 		// Prepare and show the widget
 		populateCentralContainer();
 
@@ -237,326 +249,488 @@ public class DataCubeBrowser extends AbstractWidget<DataCubeBrowser.Config> {
 
 	private void populateCentralContainer() {
 
+		cubeGraphs = new HashMap<String, String>();
+		allCubeSliceTypes = new HashMap<String, String>();
+		cubeDSDGraphs = new HashMap<String, String>();
+		sliceGraphs = new HashMap<String, String>();
+		availableLanguages = new ArrayList<String>();
+		cubeDimensions = new ArrayList<LDResource>();
+		sliceFixedDimensions = new ArrayList<LDResource>();
+		cubeDimsFromSlice = new ArrayList<LDResource>();
+		cubeMeasures = new ArrayList<LDResource>();
+		aggregationSetDims = new ArrayList<LDResource>();
+		allDimensionsValues = new HashMap<LDResource, List<LDResource>>();
+		cubeDimsOfAggregationSet = new HashMap<LDResource, List<LDResource>>();
+
 		long startTime = System.currentTimeMillis();
-		if (cubeSliceURI != null) {
-			// Get Cube/Slice Graph
-			String cubeSliceGraph = CubeSPARQL.getCubeSliceGraph(cubeSliceURI,
-					SPARQL_service);
+		// There is at least one cubeSlice
+		if (cubeSliceURIs.size() > 0) {
 
-			// Get the type of the URI i.e. cube / slice
-			List<String> cubeSliceTypes = CubeSPARQL.getType(cubeSliceURI,
-					cubeSliceGraph, SPARQL_service);
+			for (String cubeSliceURI : cubeSliceURIs) {
+				// Get Cube/Slice Graph
+				cubeGraphs.put(cubeSliceURI, CubeSPARQL.getCubeSliceGraph(
+						cubeSliceURI, SPARQL_service));
 
-			if (cubeSliceTypes != null) {
-				// The URI corresponds to a data cube
-				isCube = cubeSliceTypes
-						.contains("http://purl.org/linked-data/cube#DataSet");
-
-				// The URI corresponds to a cube Slice
-				isSlice = cubeSliceTypes
-						.contains("http://purl.org/linked-data/cube#Slice");
-			} else {
-				isCube = false;
-				isSlice = false;
+				allCubeSliceTypes.put(cubeSliceURI, CubeHandlingUtils
+						.getTypeString(cubeSliceURI,
+								cubeGraphs.get(cubeSliceURI), SPARQL_service));
 			}
 
-			// If the URI is a valid cube or slice URI
+			if (allCubeSliceTypes.size() > 0) {
+
+				// All URIs are rdf:type qb:DataSet
+				isCube = allCubeSliceTypes.containsValue("cube")
+						&& !allCubeSliceTypes.containsValue("slice")
+						&& !allCubeSliceTypes.containsValue("error");
+
+				// All URIs are rdf:type qb:Slice
+				isSlice = !allCubeSliceTypes.containsValue("cube")
+						&& allCubeSliceTypes.containsValue("slice")
+						&& !allCubeSliceTypes.containsValue("error");
+
+			} else {
+
+				isCube = false;
+				isSlice = false;
+
+			}
+
+			// If all the URI are valid cube or slice URI
+			// if (!allCubeSliceTypes.containsValue("error")) {
+
 			if (isCube || isSlice) {
-
 				if (isCube) {
-
 					// The cube graph is the graph of the URI computed above
-					cubeGraph = cubeSliceGraph;
+					// cubeGraph = cubeSliceGraph;
 
-					// Get Cube Structure graph
-					cubeDSDGraph = CubeSPARQL.getCubeStructureGraph(
-							cubeSliceURI, cubeGraph, SPARQL_service);
+					for (String cubeSliceURItmp : cubeSliceURIs) {
 
-					if (!ignoreLang) {
-						// Get the available languages of labels
-						availableLanguages = CubeSPARQL
-								.getAvailableCubeLanguages(cubeDSDGraph,
-										SPARQL_service);
+						cubeSliceURI = cubeSliceURItmp;
 
-						// get the selected language to use
-						selectedLanguage = CubeHandlingUtils
-								.getSelectedLanguage(availableLanguages,
-										selectedLanguage);
-					}
+						// Get Cube Structure graph
+						cubeDSDGraphs.put(cubeSliceURI, CubeSPARQL
+								.getCubeStructureGraph(cubeSliceURI,
+										cubeGraphs.get(cubeSliceURI),
+										SPARQL_service));
 
-					// Get all Cube dimensions
-					cubeDimensions = CubeSPARQL.getDataCubeDimensions(
-							cubeSliceURI, cubeGraph, cubeDSDGraph,
-							selectedLanguage, defaultLang, ignoreLang,
-							SPARQL_service);
+						if (!ignoreLang) {
+							// Get the available languages of labels
 
-					// Thread to get cube dimensions
-					Thread measuresThread = new Thread(new Runnable() {
-						public void run() {
-							// Get the Cube measure
-							cubeMeasures = CubeSPARQL.getDataCubeMeasure(
-									cubeSliceURI, cubeGraph, cubeDSDGraph,
-									selectedLanguage, defaultLang, ignoreLang,
-									SPARQL_service);
+							// Use set to have one instance of each language
+							HashSet<String> languagesSet = new HashSet<String>(
+									availableLanguages);
+							languagesSet.addAll(CubeSPARQL
+									.getAvailableCubeLanguages(
+											cubeDSDGraphs.get(cubeSliceURI),
+											SPARQL_service));
 
-							// Get the selected measure to use
-							selectedMeasures = CubeHandlingUtils
-									.getSelectedMeasure(cubeMeasures,
-											selectedMeasures);
+							availableLanguages = new ArrayList<String>(
+									languagesSet);
+
+							// get the selected language to use
+							selectedLanguage = CubeHandlingUtils
+									.getSelectedLanguage(availableLanguages,
+											selectedLanguage);
 						}
-					});
 
-					// Thread to get cube dimensions
-					Thread aggregationSetDimsThread = new Thread(
-							new Runnable() {
-								public void run() {
-									// Get all the dimensions of the aggregation
-									// set the cube belongs
-									aggregationSetDims = AggregationSPARQL
-											.getAggegationSetDimsFromCube(
-													cubeSliceURI, cubeDSDGraph,
-													selectedLanguage,
-													defaultLang, ignoreLang,
-													SPARQL_service);
-								}
-							});
+						HashSet<LDResource> cubeDimensionsSet = new HashSet<LDResource>(
+								cubeDimensions);
+						// Get all Cube dimensions
+						cubeDimensionsSet.addAll(CubeSPARQL
+								.getDataCubeDimensions(cubeSliceURI,
+										cubeGraphs.get(cubeSliceURI),
+										cubeDSDGraphs.get(cubeSliceURI),
+										selectedLanguage, defaultLang,
+										ignoreLang, SPARQL_service));
 
-					// Thread to get cube dimensions
-					Thread cubeDimsOfAggregationSetThread = new Thread(
-							new Runnable() {
-								public void run() {
-									// Get all the dimensions per cube of the
-									// aggregations set
-									cubeDimsOfAggregationSet = AggregationSPARQL
-											.getCubeAndDimensionsOfAggregateSet(
-													cubeSliceURI, cubeDSDGraph,
-													selectedLanguage,
-													defaultLang, ignoreLang,
-													SPARQL_service);
-								}
-							});
+						cubeDimensions = new ArrayList<LDResource>(
+								cubeDimensionsSet);
 
-					// Thread to get cube dimensions
-					Thread dimensionsValuesThread = new Thread(new Runnable() {
-						public void run() {
-							// Get values for each cube dimension
-							allDimensionsValues = CubeHandlingUtils
-									.getDimsValues(cubeDimensions,
-											cubeSliceURI, cubeGraph,
-											cubeDSDGraph, useCodeLists,
-											selectedLanguage, defaultLang,
-											ignoreLang, SPARQL_service);
+						// Thread to get cube dimensions
+						Thread measuresThread = new Thread(new Runnable() {
+							public void run() {
+								// Get the Cube measure
+
+								HashSet<LDResource> cubeMeasuresSet = new HashSet<LDResource>(
+										cubeMeasures);
+								cubeMeasuresSet.addAll(CubeSPARQL
+										.getDataCubeMeasure(
+												cubeSliceURI,
+												cubeGraphs.get(cubeSliceURI),
+												cubeDSDGraphs.get(cubeSliceURI),
+												selectedLanguage, defaultLang,
+												ignoreLang, SPARQL_service));
+
+								cubeMeasures = new ArrayList<LDResource>(
+										cubeMeasuresSet);
+
+								// Get the selected measure to use
+								selectedMeasures = CubeHandlingUtils
+										.getSelectedMeasure(cubeMeasures,
+												selectedMeasures);
+							}
+						});
+
+						// Thread to get cube dimensions
+						Thread aggregationSetDimsThread = new Thread(
+								new Runnable() {
+									public void run() {
+										// Get all the dimensions of the  aggregation
+										// set the cube belongs to
+
+										HashSet<LDResource> aggregationSetDimsSet = new HashSet<LDResource>(
+												aggregationSetDims);
+										aggregationSetDimsSet.addAll(AggregationSPARQL
+												.getAggegationSetDimsFromCube(
+														cubeSliceURI,
+														cubeDSDGraphs.get(cubeSliceURI),
+														selectedLanguage,
+														defaultLang,
+														ignoreLang,
+														SPARQL_service));
+										aggregationSetDims = new ArrayList<LDResource>(
+												aggregationSetDimsSet);
+									}
+								});
+
+						// Thread to get cube dimensions
+						Thread cubeDimsOfAggregationSetThread = new Thread(
+								new Runnable() {
+									public void run() {
+										// Get all the dimensions per cube of
+										// the
+										// aggregations set
+										cubeDimsOfAggregationSet.putAll(AggregationSPARQL
+												.getCubeAndDimensionsOfAggregateSet(
+														cubeSliceURI,
+														cubeDSDGraphs.get(cubeSliceURI),
+														selectedLanguage,
+														defaultLang,
+														ignoreLang,
+														SPARQL_service));
+									}
+								});
+
+						// Thread to get cube dimensions
+						Thread dimensionsValuesThread = new Thread(
+								new Runnable() {
+									public void run() {
+										// Get values for each cube dimension
+
+										HashMap<LDResource, List<LDResource>> thisCubeDimensionsValues = CubeHandlingUtils
+												.getDimsValues(
+														cubeDimensions,
+														cubeSliceURI,
+														cubeGraphs.get(cubeSliceURI),
+														cubeDSDGraphs.get(cubeSliceURI),
+														useCodeLists,
+														selectedLanguage,
+														defaultLang,
+														ignoreLang,
+														SPARQL_service);
+
+										for (LDResource dim : thisCubeDimensionsValues
+												.keySet()) {
+
+											HashSet<LDResource> cubeDimValuesSet;
+											if (allDimensionsValues.get(dim) != null) {
+												cubeDimValuesSet = new HashSet<LDResource>(
+														allDimensionsValues.get(dim));
+											} else {
+												cubeDimValuesSet = new HashSet<LDResource>();
+											}
+
+											cubeDimValuesSet.addAll(thisCubeDimensionsValues.get(dim));
+
+											List<LDResource> sortedcubeDimValues=
+													new ArrayList<LDResource>(cubeDimValuesSet);
+											Collections.sort(sortedcubeDimValues);
+											allDimensionsValues.put(dim,sortedcubeDimValues);
+										}
+									}
+								});
+
+						measuresThread.start();
+						aggregationSetDimsThread.start();
+						cubeDimsOfAggregationSetThread.start();
+						dimensionsValuesThread.start();
+
+						try {
+							dimensionsValuesThread.join();
+							measuresThread.join();
+							aggregationSetDimsThread.join();
+							cubeDimsOfAggregationSetThread.join();
+						} catch (InterruptedException e) {
+							e.printStackTrace();
 						}
-					});
-
-					measuresThread.start();
-					aggregationSetDimsThread.start();
-					cubeDimsOfAggregationSetThread.start();
-					dimensionsValuesThread.start();
-
-					try {
-						measuresThread.join();
-						aggregationSetDimsThread.join();
-						cubeDimsOfAggregationSetThread.join();
-						dimensionsValuesThread.join();
-					} catch (InterruptedException e) {
-						e.printStackTrace();
 					}
-
 				} else if (isSlice) {
 
-					// The slice graph is the graph of the URI computed above
-					sliceGraph = cubeSliceGraph;
+					// PREPEI NA DOUME POTE 2 SLICES EINAI COMPATIBLE
 
-					// Get the cube graph from the slice
-					cubeGraph = SliceSPARQL.getCubeGraphFromSlice(cubeSliceURI,
-							sliceGraph, SPARQL_service);
+					for (String cubeSliceURItmp : cubeSliceURIs) {
 
-					// Get Cube Structure graph from slice
-					cubeDSDGraph = SliceSPARQL.getCubeStructureGraphFromSlice(
-							cubeSliceURI, sliceGraph, SPARQL_service);
+						cubeSliceURI = cubeSliceURItmp;
 
-					if (!ignoreLang) {
-						// Get the available languages of labels
-						availableLanguages = CubeSPARQL
-								.getAvailableCubeLanguages(cubeDSDGraph,
-										SPARQL_service);
+						// The slice graph is the graph of the URI computed
+						// above
+						sliceGraphs.put(cubeSliceURI,
+								cubeGraphs.get(cubeSliceURI));
 
-						// get the selected language to use
-						selectedLanguage = CubeHandlingUtils
-								.getSelectedLanguage(availableLanguages,
-										selectedLanguage);
-					}
-				
-					Thread sliceFixedDimensionsThread = new Thread(
-							new Runnable() {
-								public void run() {
-									// Get slice fixed dimensions
-									sliceFixedDimensions = SliceSPARQL
-											.getSliceFixedDimensions(
-													cubeSliceURI, sliceGraph,
-													cubeDSDGraph,
-													selectedLanguage,
-													defaultLang, ignoreLang,
-													SPARQL_service);
-								}
-							});
+						// Get the cube graph from the slice
+						cubeGraphs.put(cubeSliceURI, SliceSPARQL
+								.getCubeGraphFromSlice(cubeSliceURI,
+										sliceGraphs.get(cubeSliceURI),
+										SPARQL_service));
 
-					Thread cubeDimsFromSliceThread = new Thread(new Runnable() {
-						public void run() {
-							// Get all cube dimensions
-							cubeDimsFromSlice = SliceSPARQL
-									.getDataCubeDimensionsFromSlice(
-											cubeSliceURI, sliceGraph,
-											cubeDSDGraph, selectedLanguage,
-											defaultLang, ignoreLang,
-											SPARQL_service);
+						// Get Cube Structure graph from slice
+						cubeDSDGraphs.put(cubeSliceURI, SliceSPARQL
+								.getCubeStructureGraphFromSlice(cubeSliceURI,
+										sliceGraphs.get(cubeSliceURI),
+										SPARQL_service));
+
+						if (!ignoreLang) {
+							// Get the available languages of/ labels
+
+							// Use set to have one instance of each language
+							HashSet<String> languagesSet = new HashSet<String>(
+									availableLanguages);
+
+							languagesSet.addAll(CubeSPARQL
+									.getAvailableCubeLanguages(
+											cubeDSDGraphs.get(cubeSliceURI),
+											SPARQL_service));
+
+							availableLanguages = new ArrayList<String>(
+									languagesSet);
+
+							// get the selected language to use
+							selectedLanguage = CubeHandlingUtils
+									.getSelectedLanguage(availableLanguages,
+											selectedLanguage);
 						}
-					});
 
-					Thread cubeMeasuresThread = new Thread(new Runnable() {
-						public void run() {
-							// Get the Cube measure
-							cubeMeasures = SliceSPARQL.getSliceMeasure(
-									cubeSliceURI, sliceGraph, cubeDSDGraph,
-									selectedLanguage, defaultLang, ignoreLang,
-									SPARQL_service);
+						Thread sliceFixedDimensionsThread = new Thread(
+								new Runnable() {
+									public void run() {
+										// Get slice fixed dimensions
+										// Use set to have one instance of fixed
+										// dim
+										HashSet<LDResource> sliceFixedDimensionsSet = new HashSet<LDResource>(
+												sliceFixedDimensions);
 
-							// Get the selected measure to use
-							selectedMeasures = CubeHandlingUtils
-									.getSelectedMeasure(cubeMeasures,
-											selectedMeasures);
+										sliceFixedDimensionsSet.addAll(SliceSPARQL
+												.getSliceFixedDimensions(
+														cubeSliceURI,
+														sliceGraphs
+																.get(cubeSliceURI),
+														cubeDSDGraphs
+																.get(cubeSliceURI),
+														selectedLanguage,
+														defaultLang,
+														ignoreLang,
+														SPARQL_service));
+
+										sliceFixedDimensions = new ArrayList<LDResource>(
+												sliceFixedDimensionsSet);
+
+									}
+								});
+
+						Thread cubeDimsFromSliceThread = new Thread(
+								new Runnable() {
+									public void run() {
+										// Get all cube dimensions
+										// Use set to have one instance of fixed
+										// dim
+										HashSet<LDResource> cubeDimsFromSliceSet = new HashSet<LDResource>(
+												cubeDimsFromSlice);
+
+										cubeDimsFromSliceSet.addAll(SliceSPARQL
+												.getDataCubeDimensionsFromSlice(
+														cubeSliceURI,
+														sliceGraphs
+																.get(cubeSliceURI),
+														cubeDSDGraphs
+																.get(cubeSliceURI),
+														selectedLanguage,
+														defaultLang,
+														ignoreLang,
+														SPARQL_service));
+
+										cubeDimsFromSlice = new ArrayList<LDResource>(
+												cubeDimsFromSliceSet);
+
+									}
+								});
+
+						Thread cubeMeasuresThread = new Thread(new Runnable() {
+							public void run() {
+								// Get the Cube measures
+								HashSet<LDResource> cubeMeasuresSet = new HashSet<LDResource>(
+										cubeMeasures);
+
+								cubeMeasuresSet.addAll(SliceSPARQL
+										.getSliceMeasure(
+												cubeSliceURI,
+												sliceGraphs.get(cubeSliceURI),
+												cubeDSDGraphs.get(cubeSliceURI),
+												selectedLanguage, defaultLang,
+												ignoreLang, SPARQL_service));
+
+								cubeMeasures = new ArrayList<LDResource>(
+										cubeMeasuresSet);
+
+								// Get the selected measure to use
+								selectedMeasures = CubeHandlingUtils
+										.getSelectedMeasure(cubeMeasures,
+												selectedMeasures);
+							}
+						});
+
+						sliceFixedDimensionsThread.start();
+						cubeDimsFromSliceThread.start();
+						cubeMeasuresThread.start();
+
+						try {
+							sliceFixedDimensionsThread.join();
+							cubeDimsFromSliceThread.join();
+							cubeMeasuresThread.join();
+						} catch (InterruptedException e) {
+							e.printStackTrace();
 						}
-					});
-					
-					sliceFixedDimensionsThread.start();
-					cubeDimsFromSliceThread.start();
-					cubeMeasuresThread.start();
 
-					try {						
-						sliceFixedDimensionsThread.join();
-						cubeDimsFromSliceThread.join();
-						cubeMeasuresThread.join();
-					} catch (InterruptedException e) {
-						e.printStackTrace();
-					}
+						// The slice visual dimensions are: (all cube dims) -
+						// (slice fixed dims)
+						cubeDimensions = cubeDimsFromSlice;
+						cubeDimensions.removeAll(sliceFixedDimensions);
 
-					// The slice visual dimensions are: (all cube dims) - (slice
-					// fixed dims)
-					cubeDimensions = cubeDimsFromSlice;
-					cubeDimensions.removeAll(sliceFixedDimensions);
+						Thread sliceFixedDimensionsValuesThread = new Thread(
+								new Runnable() {
+									public void run() {
+										sliceFixedDimensionsValues.putAll(SliceSPARQL
+												.getSliceFixedDimensionsValues(
+														sliceFixedDimensions,
+														cubeSliceURI,
+														sliceGraphs
+																.get(cubeSliceURI),
+														cubeDSDGraphs
+																.get(cubeSliceURI),
+														selectedLanguage,
+														defaultLang,
+														ignoreLang,
+														SPARQL_service));
+									}
+								});
 
-					Thread sliceFixedDimensionsValuesThread = new Thread(
-							new Runnable() {
-								public void run() {
-									sliceFixedDimensionsValues = SliceSPARQL
-											.getSliceFixedDimensionsValues(
-													sliceFixedDimensions,
-													cubeSliceURI, sliceGraph,
-													cubeDSDGraph,
-													selectedLanguage,
-													defaultLang, ignoreLang,
-													SPARQL_service);
-								}
-							});
+						Thread allDimensionsValuesThread = new Thread(
+								new Runnable() {
+									public void run() {
 
-					Thread allDimensionsValuesThread = new Thread(
-							new Runnable() {
-								public void run() {
-									// Get values for each slice dimension
-									allDimensionsValues = CubeHandlingUtils
-											.getDimsValuesFromSlice(
-													cubeDimensions,
-													cubeSliceURI, cubeGraph,
-													cubeDSDGraph, sliceGraph,
-													useCodeLists,
-													selectedLanguage,
-													defaultLang, ignoreLang,
-													SPARQL_service);
-								}
-							});
+										HashMap<LDResource, List<LDResource>> thisSliceDimensionsValues = CubeHandlingUtils
+												.getDimsValuesFromSlice(
+														cubeDimensions,
+														cubeSliceURI,
+														cubeGraphs.get(cubeSliceURI),
+														cubeDSDGraphs.get(cubeSliceURI),
+														sliceGraphs.get(cubeSliceURI),
+														useCodeLists,
+														selectedLanguage,
+														defaultLang,
+														ignoreLang,
+														SPARQL_service);
 
-					sliceFixedDimensionsValuesThread.start();
-					allDimensionsValuesThread.start();
+										for (LDResource dim : thisSliceDimensionsValues.keySet()) {
 
-					try {
-						sliceFixedDimensionsValuesThread.join();
-						allDimensionsValuesThread.join();
-					} catch (InterruptedException e) {
-						e.printStackTrace();
+											HashSet<LDResource> cubeDimValuesSet;
+											if (allDimensionsValues.get(dim) != null) {
+												cubeDimValuesSet = new HashSet<LDResource>(
+														allDimensionsValues.get(dim));
+											} else {
+												cubeDimValuesSet = new HashSet<LDResource>();
+											}
+
+											cubeDimValuesSet.addAll(thisSliceDimensionsValues.get(dim));
+
+											List<LDResource> sortedSliceDimValues=
+													new ArrayList<LDResource>(cubeDimValuesSet);
+											Collections.sort(sortedSliceDimValues);
+											allDimensionsValues.put(dim,sortedSliceDimValues);
+										}
+									}
+								});
+
+						sliceFixedDimensionsValuesThread.start();
+						allDimensionsValuesThread.start();
+
+						try {
+							sliceFixedDimensionsValuesThread.join();
+							allDimensionsValuesThread.join();
+						} catch (InterruptedException e) {
+							e.printStackTrace();
+						}
 					}
 				}
 
-				
-					// top container styling
-					selectCubeContainer.addStyle("border-style", "solid");
-					selectCubeContainer.addStyle("border-width", "1px");
-					selectCubeContainer.addStyle("padding", "10px");
-					selectCubeContainer.addStyle("border-radius", "5px");
-					selectCubeContainer.addStyle("width", "990px ");
-					selectCubeContainer.addStyle("border-color", "#C8C8C8 ");
-					selectCubeContainer.addStyle("display", "table-cell ");
-					selectCubeContainer.addStyle("vertical-align", "middle ");
-					selectCubeContainer.addStyle("align", "center");
-					selectCubeContainer.addStyle("text-align", "left");
-
-					FLabel allcubes_label = new FLabel("allcubes_label",
-							"<b>Please select a cube to visualize:<b>");
-
-					selectCubeContainer.add(allcubes_label);
-
-					// Add Combo box with cube URIs
-					FComboBox cubesCombo = new FComboBox("cubesCombo") {
-						@Override
-						public void onChange() {
-							cubeSliceURI = "<"
-									+ ((LDResource) this.getSelected().get(0))
-											.getURI() + ">";
-
-							cnt.removeAll();
-							topcontainer.removeAll();
-							leftcontainer.removeAll();
-							rightcontainer.removeAll();
-							dimensionURIfcomponents.clear();
-							languagecontainer.removeAll();
-							measurescontainer.removeAll();
-							selectCubeContainer.removeAll();
-
-							// Initialize everything for the new cube
-							mapDimURIcheckBox = new HashMap<LDResource, FCheckBox>();
-							selectedMeasures = new ArrayList<LDResource>();
-							aggregationSetDims = new ArrayList<LDResource>();
-							cubeDimsOfAggregationSet = new HashMap<LDResource, List<LDResource>>();
-							visualDimensions = new ArrayList<LDResource>();
-							fixedDimensions = new ArrayList<LDResource>();
-							sliceFixedDimensions = new ArrayList<LDResource>();
-							fixedDimensionsSelectedValues = new HashMap<LDResource, LDResource>();
-							sliceFixedDimensionsValues = new HashMap<LDResource, LDResource>();
-							mapDimURIcheckBox = new HashMap<LDResource, FCheckBox>();
-							mapMeasureURIcheckBox = new HashMap<LDResource, FCheckBox>();
-
-							// show the cube
-							populateCentralContainer();
-
-						}
-					};
-
-					// populate cubes combo box
-					for (LDResource cube : allCubes) {
-						if (cube.getLabel() != null) {
-							cubesCombo.addChoice(cube.getLabel(), cube);
-						} else {
-							cubesCombo.addChoice(cube.getURI(), cube);
-						}
-					}
-
-					if (cubeSliceURI != null) {
-						// Remove the "<" and ">" from the cube URI
-						cubesCombo.setPreSelected(new LDResource(cubeSliceURI
-								.substring(1, cubeSliceURI.length() - 1)));
-					}
-					selectCubeContainer.add(cubesCombo);
-				
+				// top container styling
+				/*
+				 * selectCubeContainer.addStyle("border-style", "solid");
+				 * selectCubeContainer.addStyle("border-width", "1px");
+				 * selectCubeContainer.addStyle("padding", "10px");
+				 * selectCubeContainer.addStyle("border-radius", "5px");
+				 * selectCubeContainer.addStyle("width", "990px ");
+				 * selectCubeContainer.addStyle("border-color", "#C8C8C8 ");
+				 * selectCubeContainer.addStyle("display", "table-cell ");
+				 * selectCubeContainer.addStyle("vertical-align", "middle ");
+				 * selectCubeContainer.addStyle("align", "center");
+				 * selectCubeContainer.addStyle("text-align", "left");
+				 * 
+				 * FLabel allcubes_label = new FLabel("allcubes_label",
+				 * "<b>Please select a cube to visualize:<b>");
+				 * 
+				 * selectCubeContainer.add(allcubes_label);
+				 * 
+				 * // Add Combo box with cube URIs FComboBox cubesCombo = new
+				 * FComboBox("cubesCombo") {
+				 * 
+				 * @Override public void onChange() { cubeSliceURI = "<" +
+				 * ((LDResource) this.getSelected().get(0)) .getURI() + ">";
+				 * 
+				 * cnt.removeAll(); topcontainer.removeAll();
+				 * leftcontainer.removeAll(); rightcontainer.removeAll();
+				 * dimensionURIfcomponents.clear();
+				 * languagecontainer.removeAll(); measurescontainer.removeAll();
+				 * selectCubeContainer.removeAll();
+				 * 
+				 * // Initialize everything for the new cube mapDimURIcheckBox =
+				 * new HashMap<LDResource, FCheckBox>(); selectedMeasures = new
+				 * ArrayList<LDResource>(); aggregationSetDims = new
+				 * ArrayList<LDResource>(); cubeDimsOfAggregationSet = new
+				 * HashMap<LDResource, List<LDResource>>(); visualDimensions =
+				 * new ArrayList<LDResource>(); fixedDimensions = new
+				 * ArrayList<LDResource>(); sliceFixedDimensions = new
+				 * ArrayList<LDResource>(); fixedDimensionsSelectedValues = new
+				 * HashMap<LDResource, LDResource>(); sliceFixedDimensionsValues
+				 * = new HashMap<LDResource, LDResource>(); mapDimURIcheckBox =
+				 * new HashMap<LDResource, FCheckBox>(); mapMeasureURIcheckBox =
+				 * new HashMap<LDResource, FCheckBox>();
+				 * 
+				 * // show the cube populateCentralContainer();
+				 * 
+				 * } };
+				 * 
+				 * // populate cubes combo box for (LDResource cube : allCubes)
+				 * { if (cube.getLabel() != null) {
+				 * cubesCombo.addChoice(cube.getLabel(), cube); } else {
+				 * cubesCombo.addChoice(cube.getURI(), cube); } }
+				 * 
+				 * if (cubeSliceURI != null) { // Remove the "<" and ">" from
+				 * the cube URI cubesCombo.setPreSelected(new
+				 * LDResource(cubeSliceURI .substring(1, cubeSliceURI.length() -
+				 * 1))); } selectCubeContainer.add(cubesCombo);
+				 */
+				// Add top container if it is a cube not slice
+			
 				int containerHeight;
 				if(cubeMeasures.size()>aggregationSetDims.size()){
 					containerHeight=(2+cubeMeasures.size())*18;
@@ -566,119 +740,105 @@ public class DataCubeBrowser extends AbstractWidget<DataCubeBrowser.Config> {
 				//minimum height needed for language select
 				if(containerHeight<60){
 					containerHeight=60;
-				}
-
-				// Add top container if it is a cube not slice
-				if (isCube) {
+				}	
 				
-					// top container styling
-					topcontainer.addStyle("border-style", "solid");
-					topcontainer.addStyle("border-width", "1px");
-					topcontainer.addStyle("padding", "10px");
-					topcontainer.addStyle("border-radius", "5px");
-					topcontainer.addStyle("border-color", "#C8C8C8 ");
-					topcontainer.addStyle("display", "table-cell ");
-					topcontainer.addStyle("vertical-align", "middle ");
-					topcontainer.addStyle("width", "400px ");
-					topcontainer.addStyle("height", containerHeight+"px ");
-					topcontainer.addStyle("margin-left", "auto");
-					topcontainer.addStyle("margin-right", "auto");
-					topcontainer.addStyle("text-align", "left");
+			if (isCube) {
+			
+				// top container styling
+				topcontainer.addStyle("border-style", "solid");
+				topcontainer.addStyle("border-width", "1px");
+				topcontainer.addStyle("padding", "10px");
+				topcontainer.addStyle("border-radius", "5px");
+				topcontainer.addStyle("border-color", "#C8C8C8 ");
+				topcontainer.addStyle("display", "table-cell ");
+				topcontainer.addStyle("vertical-align", "middle ");
+				topcontainer.addStyle("width", "400px ");
+				topcontainer.addStyle("height", containerHeight+"px ");
+				topcontainer.addStyle("margin-left", "auto");
+				topcontainer.addStyle("margin-right", "auto");
+				topcontainer.addStyle("text-align", "left");
+				
+				// If an aggregation set has already been created
+				if (aggregationSetDims.size() > 0) {
 
-					// If an aggregation set has already been created
-					if (aggregationSetDims.size() > 0) {
+					FLabel OLAPbrowsing_label = new FLabel(
+							"OLAPbrowsing_label",
+							"<b>Dimensions</b></br>"
+									+ "Summarize observations by adding/removing dimensions: </br>");
+					topcontainer.add(OLAPbrowsing_label);
 
-						FLabel OLAPbrowsing_label = new FLabel(
-								"OLAPbrowsing_label",
-								"<b>Dimensions</b></br>"
-										+ "Summarize observations by adding/removing dimensions: </br>");
-						topcontainer.add(OLAPbrowsing_label);
+					int aggregationDim = 1;
 
-						int aggregationDim = 1;
+					// Show Aggregation set dimensions
+					for (LDResource aggdim : aggregationSetDims) {
 
-						// Show Aggregation set dimensions
-						for (LDResource aggdim : aggregationSetDims) {
+						// show one check box for each aggregation set
+						// dimension
+						FCheckBox aggrDimCheckBox = new FCheckBox(
+								"aggregation_" + aggregationDim,
+								aggdim.getURIorLabel()) {
 
-							// show one check box for each aggregation set
-							// dimension
-							FCheckBox aggrDimCheckBox = new FCheckBox(
-									"aggregation_" + aggregationDim,
-									aggdim.getURIorLabel()) {
+							public void onClick() {
 
-								public void onClick() {
+								// Get all selected aggregation set dimensions for browsing
+								List<LDResource> aggregationSetSelectedDims = new ArrayList<LDResource>();
+								for (LDResource aggSetDimURI : mapDimURIcheckBox.keySet()) {
+									FCheckBox check = mapDimURIcheckBox.get(aggSetDimURI);
 
-									// Get all selected aggregation set
-									// dimensions for browsing
-									List<LDResource> aggregationSetSelectedDims = new ArrayList<LDResource>();
-									for (LDResource aggSetDimURI : mapDimURIcheckBox
-											.keySet()) {
-										FCheckBox check = mapDimURIcheckBox
-												.get(aggSetDimURI);
-
-										// Get selected dimensions
-										if (check.checked) {
-											aggregationSetSelectedDims
-													.add(aggSetDimURI);
-										}
-									}
-
-									// Identify the cube of the aggregation set
-									// that
-									// contains exactly the dimension selected
-									// to be
-									// browsed
-									for (LDResource cube : cubeDimsOfAggregationSet
-											.keySet()) {
-										List<LDResource> cubeDims = cubeDimsOfAggregationSet
-												.get(cube);
-										if ((cubeDims.size() == aggregationSetSelectedDims
-												.size())
-												&& cubeDims
-														.containsAll(aggregationSetSelectedDims)) {
-											System.out.println("NEW CUBE URI: "
-													+ cube.getURI());
-
-											// The new cube to visualize
-											cubeSliceURI = "<" + cube.getURI()
-													+ ">";
-
-											// clear the previous visualization
-											// and
-											// create a new one for the new cube
-											cnt.removeAll();
-											topcontainer.removeAll();
-											leftcontainer.removeAll();
-											rightcontainer.removeAll();
-											dimensionURIfcomponents.clear();
-											languagecontainer.removeAll();
-											measurescontainer.removeAll();
-											selectCubeContainer.removeAll();
-
-											// show the cube
-											populateCentralContainer();
-											break;
-										}
+									// Get selected dimensions
+									if (check.checked) {
+										aggregationSetSelectedDims.add(aggSetDimURI);
 									}
 								}
-							};
 
-							// set as checked if the dimension is contained at
-							// the
-							// selected cube
-							aggrDimCheckBox.setChecked(cubeDimensions
-									.contains(aggdim));
-							mapDimURIcheckBox.put(aggdim, aggrDimCheckBox);
-							topcontainer.add(aggrDimCheckBox);
+								// Identify the cube of the aggregation set that
+								// contains exactly the dimension selected to be browsed
+								cubeSliceURIs = new ArrayList<String>();
+								for (LDResource cube : cubeDimsOfAggregationSet.keySet()) {
+									List<LDResource> cubeDims = cubeDimsOfAggregationSet.get(cube);
+									if ((cubeDims.size() == aggregationSetSelectedDims.size())
+											&& cubeDims.containsAll(aggregationSetSelectedDims)) {
+										System.out.println("NEW CUBE URI: "	+ cube.getURI());
 
-							aggregationDim++;
-						}
-					} else {
+										// The new cube(s) to visualize
+										cubeSliceURIs.add("<" + cube.getURI()+ ">");
+									}
+								}
 
-						FLabel notOLAP = new FLabel("notOLAP",
-								"<b>OLAP-like browsing is not "
-										+ "supported for this cube<b>");
-						topcontainer.add(notOLAP);
+								//if aggregation set cubes have been found
+								if(cubeSliceURIs.size()>0){
+									// clear the previous visualization
+									// and create a new one for the new cube(s)
+									cnt.removeAll();
+									topcontainer.removeAll();
+									leftcontainer.removeAll();
+									rightcontainer.removeAll();
+									dimensionURIfcomponents.clear();
+									languagecontainer.removeAll();
+									measurescontainer.removeAll();
+									selectCubeContainer.removeAll();
+	
+									// show the cube
+									populateCentralContainer();
+								}
+							}
+						};
+
+						// set as checked if the dimension is contained at the
+						// selected cube
+						aggrDimCheckBox.setChecked(cubeDimensions.contains(aggdim));
+						mapDimURIcheckBox.put(aggdim, aggrDimCheckBox);
+						topcontainer.add(aggrDimCheckBox);
+
+						aggregationDim++;
 					}
+				} else {
+
+					FLabel notOLAP = new FLabel("notOLAP",
+							"<b>OLAP-like browsing is not "
+									+ "supported for this cube<b>");
+					topcontainer.add(notOLAP);
+				}
 
 				} else if (isSlice) {
 
@@ -886,25 +1046,49 @@ public class DataCubeBrowser extends AbstractWidget<DataCubeBrowser.Config> {
 								allDimensionsValues, fixedDimensions,
 								fixedDimensionsSelectedValues);
 
-				TupleQueryResult res = null;
-				// Get query tuples for visualization
-				if (isCube) {
-					res = CubeBrowserSPARQL.get2DVisualsiationValues(
-							visualDimensions, fixedDimensionsSelectedValues,
-							selectedMeasures, allDimensionsValues,
-							cubeSliceURI, cubeGraph, SPARQL_service);
-				} else if (isSlice) {
-					res = CubeBrowserSPARQL
-							.get2DVisualsiationValuesFromSlice(
-									visualDimensions,
-									fixedDimensionsSelectedValues,
-									selectedMeasures, allDimensionsValues,
-									cubeSliceURI, sliceGraph, cubeGraph,
-									SPARQL_service);
+				List<BindingSet> allResults = new ArrayList<BindingSet>();
+
+				List<String> reverseCubeSliceURIs = new ArrayList<String>(
+						cubeSliceURIs);
+
+				// We need the observations of the first cube to be shown when
+				// duplicates exist
+				Collections.reverse(reverseCubeSliceURIs);
+				for (String tmpCubeSliceURI : reverseCubeSliceURIs) {
+					TupleQueryResult res = null;
+					// Get query tuples for visualization
+					if (isCube) {
+						res = CubeBrowserSPARQL
+								.get2DVisualsiationValues(visualDimensions,
+										fixedDimensionsSelectedValues,
+										selectedMeasures, allDimensionsValues,
+										tmpCubeSliceURI,
+										cubeGraphs.get(tmpCubeSliceURI),
+										SPARQL_service);
+					} else if (isSlice) {
+						res = CubeBrowserSPARQL
+								.get2DVisualsiationValuesFromSlice(
+										visualDimensions,
+										fixedDimensionsSelectedValues,
+										selectedMeasures, allDimensionsValues,
+										tmpCubeSliceURI,
+										sliceGraphs.get(tmpCubeSliceURI),
+										cubeGraphs.get(tmpCubeSliceURI),
+										SPARQL_service);
+					}
+
+					// collect all result from all cubes
+					try {
+						while (res.hasNext()) {
+							allResults.add(res.next());
+						}
+					} catch (QueryEvaluationException e) {
+						e.printStackTrace();
+					}
 				}
 
 				// Create an FTable model based on the query tuples
-				FTableModel tm = create2DCubeTableModel(res,
+				FTableModel tm = create2DCubeTableModel(allResults,
 						allDimensionsValues, visualDimensions);
 
 				// Initialize FTable
@@ -1017,33 +1201,25 @@ public class DataCubeBrowser extends AbstractWidget<DataCubeBrowser.Config> {
 						public void onChange() {
 
 							// Get the URI of the 2nd selected dimension
-							List<String> d2Selected = this
-									.getSelectedAsString();
+							List<String> d2Selected = this.getSelectedAsString();
 
 							// Get the URI of the 1st selected dimension
 							List<String> d1Selected = null;
-							for (FComponent fc : leftcontainer
-									.getAllComponents()) {
+							for (FComponent fc : leftcontainer.getAllComponents()) {
 								if (fc.getId().contains("_dim1Combo")) {
 									d1Selected = ((FComboBox) fc)
 											.getSelectedAsString();
 
-									// Both combo boxes have the same selected
-									// value
+									// Both combo boxes have the same selected value
 									// Select randomly another value for d2
-									if (d1Selected.get(0).equals(
-											d2Selected.get(0))) {
+									if (d1Selected.get(0).equals(d2Selected.get(0))) {
 										List<Pair<String, Object>> d1choices = ((FComboBox) fc)
 												.getChoices();
 										for (Pair<String, Object> pair : d1choices) {
-											if (!pair.snd.toString().equals(
-													d1Selected.get(0))) {
+											if (!pair.snd.toString().equals(d1Selected.get(0))) {
 												d1Selected.clear();
-												d1Selected.add(pair.snd
-														.toString());
-												((FComboBox) fc)
-														.setPreSelected(pair.snd
-																.toString());
+												d1Selected.add(pair.snd.toString());
+												((FComboBox) fc).setPreSelected(pair.snd.toString());
 												((FComboBox) fc).populateView();
 												break;
 											}
@@ -1118,8 +1294,7 @@ public class DataCubeBrowser extends AbstractWidget<DataCubeBrowser.Config> {
 									.getURIorLabel().substring(0, 60) + "...");
 						} else {
 							fDimValueLabel = new FLabel("sliceFixedValue_"
-									+ sliceFixedValues,
-									fDimValue.getURIorLabel());
+									+ sliceFixedValues,	fDimValue.getURIorLabel());
 						}
 
 						farray.add(fDimValueLabel);
@@ -1153,8 +1328,7 @@ public class DataCubeBrowser extends AbstractWidget<DataCubeBrowser.Config> {
 				}
 
 				// Show fixed dimensions panel if there are any
-				if ((fixedDimensions.size() > 0)
-						|| (!sliceFixedDimensionsValues.isEmpty())) {
+				if ((fixedDimensions.size() > 0)|| (!sliceFixedDimensionsValues.isEmpty())) {
 					farray.add(rightcontainer);
 				}
 
@@ -1166,6 +1340,7 @@ public class DataCubeBrowser extends AbstractWidget<DataCubeBrowser.Config> {
 				cnt.add(ftable);
 				cnt.add(fg);
 
+				/*
 				// Show the create slice button if there are fixed dimensions
 				// i.e. a slice is not already visualized
 				if (fixedDimensions.size() > 0 && isCube) {
@@ -1194,14 +1369,14 @@ public class DataCubeBrowser extends AbstractWidget<DataCubeBrowser.Config> {
 					bottomcontainer.add(bottomLabel);
 
 					// Button to create slice
-					FButton createSlice = new FButton("createSlice",
-							"createSlice") {
+					FButton createSlice = new FButton("createSlice", "createSlice") {
+
 						@Override
 						public void onClick() {
 							String sliceURI = SliceSPARQL.createCubeSlice(
-									cubeSliceURI, cubeGraph,
+									cubeSliceURI, cubeGraphs.get(cubeSliceURI),
 									fixedDimensionsSelectedValues,
-									sliceObservations,SPARQL_service);
+									sliceObservations, SPARQL_service);
 							String message = "A new slice with the following URI has been created: "
 									+ sliceURI;
 
@@ -1213,14 +1388,19 @@ public class DataCubeBrowser extends AbstractWidget<DataCubeBrowser.Config> {
 					bottomcontainer.add(createSlice);
 					cnt.add(bottomcontainer);
 				}
-
+*/
 				// //////// Not a valid cube or Slice URI /////////////
 			} else {
 
-				String uri = cubeSliceURI.replaceAll("<", "");
-				uri = uri.replaceAll(">", "");
-				String message = "The URI <b>" + uri
-						+ "</b> is not a valid cube or slice URI.";
+				String message = "The URIs <b>";
+
+				for (String uri : cubeSliceURIs) {
+					uri = uri.replaceAll("<", "");
+					uri = uri.replaceAll(">", "");
+					message += uri + " , ";
+				}
+
+				message += "</b> are not valid cube or slice URIs.";
 				FLabel invalidURI_label = new FLabel("invalidURI", message);
 				cnt.add(invalidURI_label);
 
@@ -1235,80 +1415,81 @@ public class DataCubeBrowser extends AbstractWidget<DataCubeBrowser.Config> {
 			long elapsedTime = stopTime - startTime;
 			System.out.println("Total browser Time: " + elapsedTime);
 
-		//No cube has been yet selected
+		// No cube has been yet selected
 		} else {
-			
-				// top container styling
-				selectCubeContainer.addStyle("border-style", "solid");
-				selectCubeContainer.addStyle("border-width", "1px");
-				selectCubeContainer.addStyle("padding", "10px");
-				selectCubeContainer.addStyle("border-radius", "5px");
-				selectCubeContainer.addStyle("width", "990px ");
-				selectCubeContainer.addStyle("border-color", "#C8C8C8 ");
-				selectCubeContainer.addStyle("display", "table-cell ");
-				selectCubeContainer.addStyle("vertical-align", "middle ");
-				selectCubeContainer.addStyle("align", "center");
-				selectCubeContainer.addStyle("text-align", "left");
+/*
+			// top container styling
+			selectCubeContainer.addStyle("border-style", "solid");
+			selectCubeContainer.addStyle("border-width", "1px");
+			selectCubeContainer.addStyle("padding", "10px");
+			selectCubeContainer.addStyle("border-radius", "5px");
+			selectCubeContainer.addStyle("width", "990px ");
+			selectCubeContainer.addStyle("border-color", "#C8C8C8 ");
+			selectCubeContainer.addStyle("display", "table-cell ");
+			selectCubeContainer.addStyle("vertical-align", "middle ");
+			selectCubeContainer.addStyle("align", "center");
+			selectCubeContainer.addStyle("text-align", "left");
 
-				FLabel allcubes_label = new FLabel("allcubes_label",
-						"<b>Please select a cube to visualize:<b>");
+			FLabel allcubes_label = new FLabel("allcubes_label",
+					"<b>Please select a cube to visualize:<b>");
 
-				selectCubeContainer.add(allcubes_label);
+			selectCubeContainer.add(allcubes_label);
 
-				// Add Combo box with cube URIs
-				FComboBox cubesCombo = new FComboBox("cubesCombo") {
-					@Override
-					public void onChange() {
-						cubeSliceURI = "<"+ ((LDResource) this.getSelected().get(0)).getURI() + ">";
+			// Add Combo box with cube URIs
+			FComboBox cubesCombo = new FComboBox("cubesCombo") {
+				@Override
+				public void onChange() {
+					cubeSliceURI = "<"
+							+ ((LDResource) this.getSelected().get(0)).getURI()
+							+ ">";
 
-						cnt.removeAll();
-						topcontainer.removeAll();
-						leftcontainer.removeAll();
-						rightcontainer.removeAll();
-						dimensionURIfcomponents.clear();
-						languagecontainer.removeAll();
-						measurescontainer.removeAll();
-						selectCubeContainer.removeAll();
+					cnt.removeAll();
+					topcontainer.removeAll();
+					leftcontainer.removeAll();
+					rightcontainer.removeAll();
+					dimensionURIfcomponents.clear();
+					languagecontainer.removeAll();
+					measurescontainer.removeAll();
+					selectCubeContainer.removeAll();
 
-						// Initialize everything for the new cube
-						mapDimURIcheckBox = new HashMap<LDResource, FCheckBox>();
-						selectedMeasures = new ArrayList<LDResource>();
-						aggregationSetDims = new ArrayList<LDResource>();
-						cubeDimsOfAggregationSet = new HashMap<LDResource, List<LDResource>>();
-						visualDimensions = new ArrayList<LDResource>();
-						fixedDimensions = new ArrayList<LDResource>();
-						sliceFixedDimensions = new ArrayList<LDResource>();
-						fixedDimensionsSelectedValues = new HashMap<LDResource, LDResource>();
-						sliceFixedDimensionsValues = new HashMap<LDResource, LDResource>();
-						mapDimURIcheckBox = new HashMap<LDResource, FCheckBox>();
-						mapMeasureURIcheckBox = new HashMap<LDResource, FCheckBox>();
+					// Initialize everything for the new cube
+					mapDimURIcheckBox = new HashMap<LDResource, FCheckBox>();
+					selectedMeasures = new ArrayList<LDResource>();
+					aggregationSetDims = new ArrayList<LDResource>();
+					cubeDimsOfAggregationSet = new HashMap<LDResource, List<LDResource>>();
+					visualDimensions = new ArrayList<LDResource>();
+					fixedDimensions = new ArrayList<LDResource>();
+					sliceFixedDimensions = new ArrayList<LDResource>();
+					fixedDimensionsSelectedValues = new HashMap<LDResource, LDResource>();
+					sliceFixedDimensionsValues = new HashMap<LDResource, LDResource>();
+					mapDimURIcheckBox = new HashMap<LDResource, FCheckBox>();
+					mapMeasureURIcheckBox = new HashMap<LDResource, FCheckBox>();
 
-						// show the cube
-						populateCentralContainer();
+					// show the cube
+					populateCentralContainer();
 
-					}
-				};
-
-				// populate cubes combo box
-				for (LDResource cube : allCubes) {
-					if (cube.getLabel() != null) {
-						cubesCombo.addChoice(cube.getLabel(), cube);
-					} else {
-						cubesCombo.addChoice(cube.getURI(), cube);
-					}
 				}
+			};
 
-				if (cubeSliceURI != null) {
-					// Remove the "<" and ">" from the cube URI
-					cubesCombo.setPreSelected(new LDResource(cubeSliceURI
-							.substring(1, cubeSliceURI.length() - 1)));
+			// populate cubes combo box
+			for (LDResource cube : allCubes) {
+				if (cube.getLabel() != null) {
+					cubesCombo.addChoice(cube.getLabel(), cube);
+				} else {
+					cubesCombo.addChoice(cube.getURI(), cube);
 				}
-				selectCubeContainer.add(cubesCombo);
-
-				cnt.add(selectCubeContainer);
 			}
 
-		
+			if (cubeSliceURI != null) {
+				// Remove the "<" and ">" from the cube URI
+				cubesCombo.setPreSelected(new LDResource(cubeSliceURI
+						.substring(1, cubeSliceURI.length() - 1)));
+			}
+			selectCubeContainer.add(cubesCombo);
+
+			cnt.add(selectCubeContainer);*/
+		}
+
 	}
 
 	// Set visual and fixed dimensions based on user selection of combo boxes
@@ -1480,22 +1661,40 @@ public class DataCubeBrowser extends AbstractWidget<DataCubeBrowser.Config> {
 
 		// fixedDimensionsSelectedValues.putAll(tmpFixedDimensionsSelectedValues);
 
-		TupleQueryResult res = null;
-		if (isCube) {
+		List<BindingSet> allResults = new ArrayList<BindingSet>();
+
+		for (String tmpCubeSliceURI : cubeSliceURIs) {
+			TupleQueryResult res = null;
+			// if (isCube) {
 			// Get query tuples for visualization
 			res = CubeBrowserSPARQL.get2DVisualsiationValues(visualDimensions,
 					fixedDimensionsSelectedValues, selectedMeasures,
-					allDimensionsValues, cubeSliceURI, cubeGraph,
-					SPARQL_service);
-		} else if (isSlice) {
-			res = CubeBrowserSPARQL.get2DVisualsiationValuesFromSlice(
-					visualDimensions, fixedDimensionsSelectedValues,
-					selectedMeasures, allDimensionsValues, cubeSliceURI,
-					sliceGraph, cubeGraph, SPARQL_service);
+					allDimensionsValues, tmpCubeSliceURI,
+					cubeGraphs.get(tmpCubeSliceURI), SPARQL_service);
+
+			try {
+				while (res.hasNext()) {
+					allResults.add(res.next());
+				}
+			} catch (QueryEvaluationException e) {
+				e.printStackTrace();
+			}
 		}
 
+		/*
+		 * TupleQueryResult res = null; if (isCube) { // Get query tuples for
+		 * visualization res =
+		 * CubeBrowserSPARQL.get2DVisualsiationValues(visualDimensions,
+		 * fixedDimensionsSelectedValues, selectedMeasures, allDimensionsValues,
+		 * cubeSliceURI, cubeGraph, SPARQL_service); } else if (isSlice) { res =
+		 * CubeBrowserSPARQL.get2DVisualsiationValuesFromSlice(
+		 * visualDimensions, fixedDimensionsSelectedValues, selectedMeasures,
+		 * allDimensionsValues, cubeSliceURI, sliceGraph, cubeGraph,
+		 * SPARQL_service); }
+		 */
+
 		// create table model for visualization
-		FTableModel newTableModel = create2DCubeTableModel(res,
+		FTableModel newTableModel = create2DCubeTableModel(allResults,
 				allDimensionsValues, visualDimensions);
 		ftable.setModel(newTableModel);
 		ftable.populateView();
@@ -1504,7 +1703,7 @@ public class DataCubeBrowser extends AbstractWidget<DataCubeBrowser.Config> {
 
 	// Create a table model from the Tuple query result in order to visualize
 	private FTableModel create2DCubeTableModel(
-			TupleQueryResult res,
+			List<BindingSet> res,
 			HashMap<LDResource, List<LDResource>> dimensions4VisualisationValues,
 			List<LDResource> visualDimensions) {
 
@@ -1538,118 +1737,98 @@ public class DataCubeBrowser extends AbstractWidget<DataCubeBrowser.Config> {
 		// Add all visual observations to a list - to create a slice later on
 		sliceObservations.clear();
 
-		try {
+		// If there are 2 visual dimensions
+		if (visualDimensions.size() == 2) {
 
-			// /// Set the first row of FTableModel////
+			// The first column of 1st row - the name of the 2nd dimension
+			tm.addColumn(visualDimensions.get(1).getURIorLabel());
+
+			// The rest columns of the first row - the values of the 1st
+			// dimension
+			for (LDResource dim1Val : dim1) {
+				tm.addColumn(dim1Val.getURIorLabel());
+			}
+
+			// If there is 1 visual dimensions
+		} else {
+			tm.addColumn(visualDimensions.get(0).getURIorLabel());
+			tm.addColumn("Measure");
+		}
+
+		// for each cube observation
+		for (BindingSet bindingSet : res) {
+
+			// BindingSet bindingSet = res.next();
+
+			// get Dim1 value
+			String dim1Val = bindingSet.getValue("dim1").stringValue();
+			LDResource r1 = new LDResource(dim1Val);
+
+			String measure = "";
+			// get measures
+			int i = 1;
+			for (LDResource meas : selectedMeasures) {
+				measure += "<font color=\""
+						+ measureColors[cubeMeasures.indexOf(meas)] + "\">"
+						+ "<p align=\"right\">"
+						+ bindingSet.getValue("measure" + i).stringValue()
+						+ " </p></font> ";
+				i++;
+			}
+
+			// get observation URI
+			String obsURI = bindingSet.getValue("obs").stringValue();
+			LDResource obs = new LDResource(obsURI);
+			obs.setLabel(measure);
 
 			// If there are 2 visual dimensions
 			if (visualDimensions.size() == 2) {
+				// get Dim2 value
+				String dim2Val = bindingSet.getValue("dim2").stringValue();
+				LDResource r2 = new LDResource(dim2Val);
 
-				// The first column of 1st row - the name of the 2nd dimension
-				if(visualDimensions.get(1).getURIorLabel().length()>35){
-					tm.addColumn(visualDimensions.get(1).getURIorLabel().substring(0,35)+"...");
-				}else{
-					tm.addColumn(visualDimensions.get(1).getURIorLabel());
-				}
-
-				
-
-				// The rest columns of the first row - the values of the 1st
-				// dimension
-				for (LDResource dim1Val : dim1) {
-					tm.addColumn(dim1Val.getURIorLabel());
-				}
-
-				// If there is 1 visual dimensions
+				// Add the observation to the corresponding (row, column)
+				// position of the table
+				v2DCube[dim2.indexOf(r2)][dim1.indexOf(r1)] = obs;
 			} else {
-				tm.addColumn(visualDimensions.get(0).getURIorLabel());
-				tm.addColumn("Measure");
+
+				v2DCube[dim1.indexOf(r1)][0] = obs;
 			}
 
-			// for each cube observation
-			while (res.hasNext()) {
+			// add observation to potential slice
+			sliceObservations.add(obs);
+		}
 
-				BindingSet bindingSet = res.next();
+		// If there are 2 visual dimensions
+		if (visualDimensions.size() == 2) {
+			// populate the FTableModel based on the v2DCube created
+			for (int i = 0; i < dim2.size(); i++) {
+				Object[] data = new Object[dim1.size() + 1];
 
-				// get Dim1 value
-				String dim1Val = bindingSet.getValue("dim1").stringValue();
-				LDResource r1 = new LDResource(dim1Val);
-
-				String measure = "";
-				// get measures
-				int i = 1;
-				for (LDResource meas : selectedMeasures) {
-					if(bindingSet.getValue("measure_" + meas.getLastPartOfURI())!=null){
-						measure += "<font color=\""
-								+ measureColors[cubeMeasures.indexOf(meas)] + "\">"
-								+ "<p align=\"right\">"
-								+ bindingSet.getValue("measure_" + meas.getLastPartOfURI()).stringValue()
-								+ " </p></font> ";
-					}
-					i++;
-				}
-				
-				
-				
-				
-
-				// get observation URI
-				String obsURI = bindingSet.getValue("obs").stringValue();
-				LDResource obs = new LDResource(obsURI);
-				obs.setLabel(measure);
-
-				// If there are 2 visual dimensions
-				if (visualDimensions.size() == 2) {
-					// get Dim2 value
-					String dim2Val = bindingSet.getValue("dim2").stringValue();
-					LDResource r2 = new LDResource(dim2Val);
-
-					// Add the observation to the corresponding (row, column)
-					// position of the table
-					v2DCube[dim2.indexOf(r2)][dim1.indexOf(r1)] = obs;
-				} else {
-
-					v2DCube[dim1.indexOf(r1)][0] = obs;
-				}
-
-				// add observation to potential slice
-				sliceObservations.add(obs);
-			}
-
-			// If there are 2 visual dimensions
-			if (visualDimensions.size() == 2) {
-				// populate the FTableModel based on the v2DCube created
-				for (int i = 0; i < dim2.size(); i++) {
-					Object[] data = new Object[dim1.size() + 1];
-
-					// Add row header (values in first column)
-					data[0] = getHTMLStringFromLDResource(dim2.get(i));
-
-					// Add observations
-					for (int j = 1; j <= dim1.size(); j++) {
-						data[j] = getHTMLStringFromLDResource(v2DCube[i][j - 1]);
-					}
-
-					tm.addRow(data);
-				}
-
-				// If there is 1 visual dimensions
-			} else {
+				// Add row header (values in first column)
+				data[0] = getHTMLStringFromLDResource(dim2.get(i));
 
 				// Add observations
-				for (int j = 0; j < dim1.size(); j++) {
-					Object[] data = new Object[2];
-					// Add row header (values in first column)
-					data[0] = getHTMLStringFromLDResource(dim1.get(j));
-
-					data[1] = getHTMLStringFromLDResource(v2DCube[j][0]);
-					tm.addRow(data);
+				for (int j = 1; j <= dim1.size(); j++) {
+					data[j] = getHTMLStringFromLDResource(v2DCube[i][j - 1]);
 				}
 
+				tm.addRow(data);
 			}
 
-		} catch (QueryEvaluationException e) {
-			e.printStackTrace();
+			// If there is 1 visual dimensions
+		} else {
+
+			// Add observations
+			for (int j = 0; j < dim1.size(); j++) {
+				Object[] data = new Object[2];
+				// Add row header (values in first column)
+				data[0] = getHTMLStringFromLDResource(dim1.get(j));
+
+				data[1] = getHTMLStringFromLDResource(v2DCube[j][0]);
+				tm.addRow(data);
+			}
+
 		}
 		return tm;
 	}

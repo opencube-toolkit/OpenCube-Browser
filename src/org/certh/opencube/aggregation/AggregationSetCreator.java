@@ -1,6 +1,7 @@
 package org.certh.opencube.aggregation;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Random;
@@ -50,6 +51,7 @@ public class AggregationSetCreator extends
 	// The central container
 	private FContainer cnt;
 	
+	List<LDResource> cubesWithNoAggregationSet=new ArrayList<LDResource>();
 	private List<String> availableLanguages;
 	
 	private String selectedLanguage="";
@@ -101,8 +103,7 @@ public class AggregationSetCreator extends
 		cnt.addStyle("margin-right", "auto");
 
 		// Get all cubes from the store that do not have Aggregation sets
-		List<LDResource> cubesWithNoAggregationSet = AggregationSPARQL
-				.getCubesWithNoAggregationSet();
+		cubesWithNoAggregationSet = AggregationSPARQL.getCubesWithNoAggregationSet();
 
 		//If there are cubes out of  Aggregation Set
 		if (cubesWithNoAggregationSet.size() > 0) {
@@ -120,81 +121,304 @@ public class AggregationSetCreator extends
 
 			// Button to create aggregation set
 			FButton createAggregationSet = new FButton("createAggregationSet",
-					"enable OLAP-like browsing") {
+					"enable OLAP-like browsing for all") {
 				@Override
 				public void onClick() {
+					for (LDResource cube : cubesWithNoAggregationSet) {
+						// Cube URI to enable OLAP-like browsing
+						String cubeURI = "<"+cube.getURI()+">";
+								//"<"+ cubesCombo.getSelectedAsString().get(0) + ">";
 
-					// Cube URI to enable OLAP-like browsing
-					String cubeURI = "<"+ cubesCombo.getSelectedAsString().get(0) + ">";
+						// Get cube graph
+						String cubeGraph = CubeSPARQL.getCubeSliceGraph(
+								cubeURI, SPARQL_Service);
 
-					// Get cube graph
-					String cubeGraph = CubeSPARQL.getCubeSliceGraph(cubeURI,SPARQL_Service);
+						// Get Cube Structure graph
+						String cubeDSDGraph = CubeSPARQL.getCubeStructureGraph(
+								cubeURI, cubeGraph, SPARQL_Service);
 
-					// Get Cube Structure graph
-					String cubeDSDGraph = CubeSPARQL.getCubeStructureGraph(
-							cubeURI, cubeGraph, SPARQL_Service);
-					
-					//Get the available languages of labels
-					availableLanguages=CubeSPARQL.getAvailableCubeLanguages(
-							
-							cubeDSDGraph,SPARQL_Service);
+						// Get the available languages of labels
+						availableLanguages = CubeSPARQL
+								.getAvailableCubeLanguages(
 
-					//get the selected language to use
-					selectedLanguage=CubeHandlingUtils.getSelectedLanguage(
-							availableLanguages, selectedLanguage);
+								cubeDSDGraph, SPARQL_Service);
 
-					// Get all Cube dimensions
-					List<LDResource> cubeDimensions = CubeSPARQL
-							.getDataCubeDimensions(cubeURI, cubeGraph,
-									cubeDSDGraph,selectedLanguage,defaultLang,ignoreLang, SPARQL_Service);
+						// get the selected language to use
+						selectedLanguage = CubeHandlingUtils
+								.getSelectedLanguage(availableLanguages,
+										selectedLanguage);
 
-					// Get the Cube measure
-					List<LDResource> cubeMeasure = CubeSPARQL.getDataCubeMeasure(
-							cubeURI, cubeGraph, cubeDSDGraph,selectedLanguage,defaultLang,ignoreLang,
-							SPARQL_Service);
+						// Get all Cube dimensions
+						List<LDResource> cubeDimensions = CubeSPARQL
+								.getDataCubeDimensions(cubeURI, cubeGraph,
+										cubeDSDGraph, selectedLanguage,
+										defaultLang, ignoreLang, SPARQL_Service);
 
-					// Create new aggregation set
-					String aggregationSetURI = AggregationSPARQL
-							.createNewAggregationSet(cubeDSDGraph,SPARQL_Service);
+						// Get the Cube measure
+						List<LDResource> cubeMeasure = CubeSPARQL
+								.getDataCubeMeasure(cubeURI, cubeGraph,
+										cubeDSDGraph, selectedLanguage,
+										defaultLang, ignoreLang, SPARQL_Service);
 
-					// Attach original cube to aggregation set
-					AggregationSPARQL.attachCube2AggregationSet(
-							aggregationSetURI, cubeDSDGraph, cubeURI,
-							SPARQL_Service);
-					
-					OrderedPowerSet<LDResource> ops = new OrderedPowerSet<LDResource>(
-							(ArrayList<LDResource>) cubeDimensions);
+						// Create new aggregation set
+						String aggregationSetURI = AggregationSPARQL
+								.createNewAggregationSet(cubeDSDGraph,
+										SPARQL_Service);
 
-					//calculate all dimension combinations
-					for (int j = 1; j < cubeDimensions.size(); j++) {
-						System.out.println("SIZE = " + j);
+						// Attach original cube to aggregation set
+						AggregationSPARQL.attachCube2AggregationSet(
+								aggregationSetURI, cubeDSDGraph, cubeURI,
+								SPARQL_Service);
 
-						List<LinkedHashSet<LDResource>> perms = ops.getPermutationsList(j);
-						for (Set<LDResource> myset : perms) {
-							String st = "";
-							for (LDResource l : myset) {
-								st += l.getURI() + " ";
+						OrderedPowerSet<LDResource> ops = new OrderedPowerSet<LDResource>(
+								(ArrayList<LDResource>) cubeDimensions);
+
+						// calculate all dimension combinations
+						for (int j = 1; j < cubeDimensions.size(); j++) {
+							System.out.println("SIZE = " + j);
+
+							List<LinkedHashSet<LDResource>> perms = ops
+									.getPermutationsList(j);
+							for (Set<LDResource> myset : perms) {
+								String st = "";
+								for (LDResource l : myset) {
+									st += l.getURI() + " ";
+								}
+								System.out.println(st);
+
+								// create new cube of aggregation set
+						/*		String newCubeURI = AggregationSPARQL
+										.createCubeForAggregationSet(myset,
+												cubeMeasure, cubeURI,
+												cubeGraph, cubeDSDGraph,
+												aggregationSetURI,
+												SPARQL_Service);
+
+								System.out.println("NEW CUBE: " + newCubeURI);*/
 							}
-							System.out.println(st);
-
-							//create new cube of aggregation set
-							String newCubeURI = AggregationSPARQL
-									.createCubeForAggregationSet(myset,	cubeMeasure,
-											cubeURI, cubeGraph,	cubeDSDGraph, aggregationSetURI,
-											SPARQL_Service);
-
-							System.out.println("NEW CUBE: " + newCubeURI);
+							System.out.println("----------");
 						}
-						System.out.println("----------");
 					}
-
 					FDialog.showMessage(this.getPage(),
 							"OLAP-like browsing enabled",
-							"OLAP-Like browsing has been enabled for cube: "
-									+ cubesCombo.getSelectedAsString().get(0),"ok");
+							"OLAP-Like browsing has been enabled for all cubes: "
+							, "ok");
 
 				}
 			};
+			
+			// Button to create aggregation set
+			FButton createSingleAggregationSet = new FButton("createSingleAggregationSet",
+								"enable OLAP-like browsing for selected cube") {
+							@Override
+							public void onClick() {
+									// Cube URI to enable OLAP-like browsing
+									String cubeURI ="<"+ cubesCombo.getSelectedAsString().get(0) + ">";
+
+									// Get cube graph
+									String cubeGraph = CubeSPARQL.getCubeSliceGraph(
+											cubeURI, SPARQL_Service);
+
+									// Get Cube Structure graph
+									String cubeDSDGraph = CubeSPARQL.getCubeStructureGraph(
+											cubeURI, cubeGraph, SPARQL_Service);
+
+									// Get the available languages of labels
+									availableLanguages = CubeSPARQL
+											.getAvailableCubeLanguages(
+
+											cubeDSDGraph, SPARQL_Service);
+
+									// get the selected language to use
+									selectedLanguage = CubeHandlingUtils
+											.getSelectedLanguage(availableLanguages,
+													selectedLanguage);
+
+									// Get all Cube dimensions
+									List<LDResource> cubeDimensions = CubeSPARQL
+											.getDataCubeDimensions(cubeURI, cubeGraph,
+													cubeDSDGraph, selectedLanguage,
+													defaultLang, ignoreLang, SPARQL_Service);
+
+									// Get the Cube measure
+									List<LDResource> cubeMeasure = CubeSPARQL
+											.getDataCubeMeasure(cubeURI, cubeGraph,
+													cubeDSDGraph, selectedLanguage,
+													defaultLang, ignoreLang, SPARQL_Service);
+
+									// Create new aggregation set
+									String aggregationSetURI = AggregationSPARQL
+											.createNewAggregationSet(cubeDSDGraph,
+													SPARQL_Service);
+
+									// Attach original cube to aggregation set
+									AggregationSPARQL.attachCube2AggregationSet(
+											aggregationSetURI, cubeDSDGraph, cubeURI,
+											SPARQL_Service);
+
+									OrderedPowerSet<LDResource> ops = new OrderedPowerSet<LDResource>(
+											(ArrayList<LDResource>) cubeDimensions);
+
+									// calculate all dimension combinations
+									for (int j = 1; j < cubeDimensions.size(); j++) {
+										System.out.println("SIZE = " + j);
+
+										List<LinkedHashSet<LDResource>> perms = ops
+												.getPermutationsList(j);
+										for (Set<LDResource> myset : perms) {
+											String st = "";
+											for (LDResource l : myset) {
+												st += l.getURI() + " ";
+											}
+											System.out.println(st);
+/*
+											// create new cube of aggregation set
+											String newCubeURI = AggregationSPARQL
+													.createCubeForAggregationSet(myset,
+															cubeMeasure, cubeURI,
+															cubeGraph, cubeDSDGraph,
+															aggregationSetURI,
+															SPARQL_Service);
+
+											System.out.println("NEW CUBE: " + newCubeURI);*/
+										}
+										System.out.println("----------");
+									}
+								
+								FDialog.showMessage(this.getPage(),
+										"OLAP-like browsing enabled",
+										"OLAP-Like browsing has been enabled for cube: "+
+										 cubesCombo.getSelectedAsString().get(0)
+										, "ok");
+
+							}
+						};
+						
+						// Button to create aggregation set
+						FButton createRollUpAggregation = new FButton("createRollUpAggregation",
+											"enable Roll-up browsing for selected cube") {
+										@Override
+										public void onClick() {
+											// Cube URI to enable OLAP-like browsing
+											String cubeURI ="<"+ cubesCombo.getSelectedAsString().get(0) + ">";
+
+											// Get cube graph
+											String cubeGraph = CubeSPARQL.getCubeSliceGraph(
+														cubeURI, SPARQL_Service);
+
+											// Get Cube Structure graph
+											String cubeDSDGraph = CubeSPARQL.getCubeStructureGraph(
+														cubeURI, cubeGraph, SPARQL_Service);
+
+											// Get the available languages of labels
+											availableLanguages = CubeSPARQL.getAvailableCubeLanguages(
+																	cubeDSDGraph, SPARQL_Service);
+
+											// get the selected language to use
+											selectedLanguage = CubeHandlingUtils.getSelectedLanguage(
+														availableLanguages,	selectedLanguage);
+
+											// Get all Cube dimensions
+											List<LDResource> cubeDimensions = CubeSPARQL
+														.getDataCubeDimensions(cubeURI, cubeGraph,
+																cubeDSDGraph, selectedLanguage,
+																defaultLang, ignoreLang, SPARQL_Service);
+
+											// Get the Cube measure
+											List<LDResource> cubeMeasure = CubeSPARQL
+													.getDataCubeMeasure(cubeURI, cubeGraph,
+															cubeDSDGraph, selectedLanguage,
+															defaultLang, ignoreLang, SPARQL_Service);
+											
+											//dimension levels from data
+											HashMap<LDResource, List<LDResource>> dimensionsLevels = 
+													CubeHandlingUtils.getDimensionsLevels(
+															cubeURI,cubeDimensions,
+															cubeDSDGraph, cubeGraph,
+															selectedLanguage,
+															defaultLang, ignoreLang,
+															SPARQL_Service);
+											
+											//dimension levels from schema
+											HashMap<LDResource, List<LDResource>> dimensionsLevelsFromSchema =
+													new HashMap<LDResource, List<LDResource>>();
+											for(LDResource dim:cubeDimensions){
+												List<LDResource> dimLevelsFromSchema=
+														CubeSPARQL.getDimensionLevelsFromSchema(
+																dim.getURI(), cubeDSDGraph, selectedLanguage, 
+																defaultLang, ignoreLang, SPARQL_Service);
+												dimensionsLevelsFromSchema.put(dim, dimLevelsFromSchema);
+												
+											}
+											
+											
+											//compute rollup aggregations if they are not computed yet
+											// i.e. the schema and data levels are different 
+											for(LDResource dim:dimensionsLevels.keySet()){
+												List<LDResource> dimLevels=dimensionsLevels.get(dim);
+												List<LDResource> dimSchemaLevels=dimensionsLevelsFromSchema.get(dim);
+
+												//If the schema has more levels than the data
+												if(dimSchemaLevels.size()>dimLevels.size()){
+													// create rollup aggregations for dimension with hierarchy
+													AggregationSPARQL.createRollUpAggregation(dim,
+															cubeDimensions, cubeMeasure, cubeURI,cubeGraph,
+															cubeDSDGraph,SPARQL_Service);
+												}												
+											}
+											
+											
+											
+											// Create new aggregation set
+											String aggregationSetURI = AggregationSPARQL
+													.createNewAggregationSet(cubeDSDGraph,
+															SPARQL_Service);
+
+											// Attach original cube to aggregation set
+											AggregationSPARQL.attachCube2AggregationSet(
+													aggregationSetURI, cubeDSDGraph, cubeURI,
+													SPARQL_Service);
+
+											OrderedPowerSet<LDResource> ops = new OrderedPowerSet<LDResource>(
+													(ArrayList<LDResource>) cubeDimensions);
+
+											// calculate all dimension combinations
+											for (int j = 1; j < cubeDimensions.size(); j++) {
+												System.out.println("SIZE = " + j);
+
+												List<LinkedHashSet<LDResource>> perms = ops
+														.getPermutationsList(j);
+												for (Set<LDResource> myset : perms) {
+													String st = "";
+													for (LDResource l : myset) {
+														st += l.getURI() + " ";
+													}
+													System.out.println(st);
+
+													// create new cube of aggregation set
+													String newCubeURI = AggregationSPARQL
+															.createCubeForAggregationSet(myset,
+																	cubeMeasure, cubeURI,
+																	cubeGraph, cubeDSDGraph,
+																	aggregationSetURI,dimensionsLevelsFromSchema,
+																	SPARQL_Service);
+
+													System.out.println("NEW CUBE: " + newCubeURI);
+												}
+												System.out.println("----------");
+											}
+										
+											
+											
+											
+											
+																	
+											FDialog.showMessage(this.getPage(),
+													"RollUp operation for browsing enabled",
+													"RollUp operation for browsing has been enabled for cube: "+
+													 cubesCombo.getSelectedAsString().get(0), "ok");
+										}
+									};
 
 			FLabel much_time = new FLabel("much_time",
 					"The process may take long depending on the cube's size");
@@ -202,7 +426,11 @@ public class AggregationSetCreator extends
 			cnt.add(aggregation_label);
 			cnt.add(cubesCombo);
 			cnt.add(getNewLineComponent());
+			cnt.add(createSingleAggregationSet);
+			cnt.add(getNewLineComponent());
 			cnt.add(createAggregationSet);
+			cnt.add(getNewLineComponent());
+			cnt.add(createRollUpAggregation);
 			cnt.add(getNewLineComponent());
 			cnt.add(much_time);
 		} else {

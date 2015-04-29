@@ -365,6 +365,25 @@ public class CubeHandlingUtils {
 
 		return dimensionsConceptSchemes;	
 	}
+	
+	public static String getTypeString(String cubeSliceURI,String cubeSliceGraph, String SPARQL_service){
+		
+		// Get the type of the URI i.e. cube / slice
+		List<String> cubeSliceTypes = CubeSPARQL.getType(cubeSliceURI,
+				cubeSliceGraph, SPARQL_service);
 
-
+		if (cubeSliceTypes != null) {
+			// The URI corresponds to a data cube
+			if(cubeSliceTypes.contains("http://purl.org/linked-data/cube#DataSet")){
+				return "cube";				
+			// The URI corresponds to a cube Slice
+			}else if(cubeSliceTypes	.contains("http://purl.org/linked-data/cube#Slice")) {
+				return "slice";
+			}else{
+				return "error";
+			}			
+		} else {
+			return "error";
+		}		
+	}
 }
