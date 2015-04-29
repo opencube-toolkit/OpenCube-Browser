@@ -2766,30 +2766,12 @@ public class SelectionSPARQL {
 				originalCubeURI, originalCubeGraph, SPARQLservice);
 		
 		String originalCubeDSD=CubeSPARQL.getCubeDSD(originalCubeURI, originalCubeGraph);
-
-		// Get original Cube Dimensions
-	//	List<LDResource> originalCubeDimensions = CubeSPARQL
-	//			.getDataCubeDimensions(originalCubeURI, originalCubeGraph,
-	//					originalCubeDSDGraph, selectedLanguage, defaultLang,
-	//					ignoreLang, SPARQLservice);
-
-		// Get original Cube Measures
-	//	List<LDResource> originalCubeMeasures = CubeSPARQL.getDataCubeMeasure(
-	//			originalCubeURI, originalCubeGraph, originalCubeDSDGraph,
-	//			selectedLanguage, defaultLang, ignoreLang, SPARQLservice);
-
 		
 		List<LDResource> originalCubeExpansionDimensionValues=
 				CubeSPARQL.getDimensionValues(expansionDim.getURI(),
 						originalCubeURI, originalCubeGraph, originalCubeDSDGraph,
 						selectedLanguage, defaultLang, ignoreLang, SPARQLservice); 
 		
-	//	HashMap<LDResource, List<LDResource>> originalCubeAllDimensionsValues = CubeHandlingUtils
-	//			.getDimsValues(originalCubeDimensions, originalCubeURI,
-	//					originalCubeGraph, originalCubeDSDGraph, false,
-	//					selectedLanguage, defaultLang, ignoreLang,
-	//					SPARQLservice);
-
 		// ///////// EXPANDER CUBE ///////////////////////////
 
 		String expanderCubeURI = "<" + expanderCube.getURI() + ">";
@@ -2819,93 +2801,18 @@ public class SelectionSPARQL {
 						expanderCubeURI, expanderCubeGraph, expanderCubeDSDGraph,
 						selectedLanguage, defaultLang, ignoreLang, SPARQLservice); 
 		
-	//	HashMap<LDResource, List<LDResource>> expanderCubeAllDimensionsValues = CubeHandlingUtils
-	//			.getDimsValues(expanderCubeDimensions, expanderCubeURI,
-	//					expanderCubeGraph, expanderCubeDSDGraph, false,
-	//					selectedLanguage, defaultLang, ignoreLang,
-	//					SPARQLservice);
-
 		// create random DSD, Cube URI and Cube Graph URI
 		Random rand = new Random();
 		long rnd = Math.abs(rand.nextLong());
 
-	//	String newDSD_URI = "<http://www.fluidops.com/resource/dsd_" + rnd	+ ">";
+	
 		String newCube_URI = "<http://www.fluidops.com/resource/cube_" + rnd+ ">";
-	//	String newCubeGraph_URI = "<http://www.fluidops.com/resource/graph_"+ rnd + ">";
-/*
-		// Add new DSD
-		// ADD THE NEW DSD AT THE ORIGINAL CUBE DSD GRAPH
-		String create_new_merged_dsd_query = "PREFIX qb: <http://purl.org/linked-data/cube#>"
-				+ "PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>"
-				+ "INSERT DATA  {";
-
-		if (SPARQLservice != null) {
-			create_new_merged_dsd_query += "SERVICE " + SPARQLservice + " {";
-		}
-
-		if (originalCubeDSDGraph != null) {
-			create_new_merged_dsd_query += "GRAPH <" + originalCubeDSDGraph
-					+ "> {";
-		}
-
-		create_new_merged_dsd_query += newDSD_URI
-				+ " rdf:type qb:DataStructureDefinition.";
-
-		// Add dimensions to DSD
-		for (LDResource ldr : originalCubeDimensions) {
-			rnd = Math.abs(rand.nextLong());
-			String newComponentSpecification_URI = "<http://www.fluidops.com/resource/componentSpecification_"
-					+ rnd + ">";
-			create_new_merged_dsd_query += newDSD_URI + " qb:component "
-					+ newComponentSpecification_URI + "."
-					+ newComponentSpecification_URI + " qb:dimension <"
-					+ ldr.getURI() + ">.";
-		}
-
-		// //Set<LDResource> mergedMeasures=new
-		// HashSet<LDResource>(originalCubeMeasures);
-		// mergedMeasures.addAll(expanderCubeMeasures);
-		// Add measures to DSD
-		for (LDResource m : originalCubeMeasures) {
-			rnd = Math.abs(rand.nextLong());
-			String newComponentSpecification_URI = "<http://www.fluidops.com/resource/componentSpecification_"
-					+ rnd + ">";
-			create_new_merged_dsd_query += newDSD_URI + " qb:component "
-					+ newComponentSpecification_URI + "."
-					+ newComponentSpecification_URI + " qb:measure <"
-					+ m.getURI() + ">.";
-		}
-
-		create_new_merged_dsd_query += "} ";
-
-		if (originalCubeDSDGraph != null) {
-			create_new_merged_dsd_query += "}";
-		}
-
-		if (SPARQLservice != null) {
-			create_new_merged_dsd_query += "}";
-		}
-
-		QueryExecutor.executeUPDATE(create_new_merged_dsd_query);
-*/
+	
 		// GET ORIGINAL CUBE OBSERVATIONS
 		String getOriginalCubeObservations_query = "PREFIX qb: <http://purl.org/linked-data/cube#>"
 				+ "PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>"
 				+ "Select ?obs ";
 		int i = 1;
-
-/*		// Add dimension variables to query
-		for (LDResource ldr : originalCubeDimensions) {
-			getOriginalCubeObservations_query += "?dim" + i + " ";
-			i++;
-		}
-
-		i = 1;
-		// Add dimension variables to query
-		for (LDResource ldr : originalCubeMeasures) {
-			getOriginalCubeObservations_query += "?measure" + i + " ";
-			i++;
-		}*/
 
 		getOriginalCubeObservations_query += "where{";
 		if (SPARQLservice != null) {
@@ -2919,20 +2826,6 @@ public class SelectionSPARQL {
 		}
 
 		getOriginalCubeObservations_query += "?obs qb:dataSet "	+ originalCubeURI + ".";
-
-	/*	i = 1;
-		for (LDResource ldr : originalCubeDimensions) {
-			getOriginalCubeObservations_query += "?obs <" + ldr.getURI()
-					+ "> ?dim" + i + ".";
-			i++;
-		}
-
-		i = 1;
-		for (LDResource m : originalCubeMeasures) {
-			getOriginalCubeObservations_query += "?obs <" + m.getURI()
-					+ "> ?measure" + i + ".";
-			i++;
-		}*/
 
 		getOriginalCubeObservations_query += "}";
 
@@ -2976,50 +2869,10 @@ public class SelectionSPARQL {
 			// Insert cubes in sets of 100
 
 			for (BindingSet bindingSet : bs) {
-
-				// Observation URI
-			//	String newObservation_URI = "<http://www.fluidops.com/resource/observation_"
-			//			+ obsCount + ">";
-			//	create_new_cube_query += newObservation_URI
-			//			+ " rdf:type qb:Observation." + newObservation_URI
-			//			+ " qb:dataSet " + newCube_URI + ".";
-
+			
 				create_new_cube_query +=  "<"+bindingSet.getValue("obs")
 						+ "> qb:dataSet " + newCube_URI + ".";
-			/*	i = 1;
-				for (LDResource ldr : originalCubeDimensions) {
-					String dimValue = bindingSet.getValue("dim" + i)
-							.stringValue();
-					// Is URI
-					if (dimValue.contains("http")) {
-						create_new_cube_query += newObservation_URI + " <"
-								+ ldr.getURI() + "> <" + dimValue + ">.";
-
-						// Is literal
-					} else {
-						create_new_cube_query += newObservation_URI + " <"
-								+ ldr.getURI() + "> \"" + dimValue + "\".";
-					}
-					i++;
-				}
-
-				i = 1;
-				for (LDResource ldr : originalCubeMeasures) {
-					String measureValue = bindingSet.getValue("measure" + i)
-							.stringValue();
-					// Is URI
-					if (measureValue.contains("http")) {
-						create_new_cube_query += newObservation_URI + " <"
-								+ ldr.getURI() + "> <" + measureValue + ">.";
-
-						// Is literal
-					} else {
-						create_new_cube_query += newObservation_URI + " <"
-								+ ldr.getURI() + "> \"" + measureValue + "\".";
-					}
-					i++;
-				}
-*/
+			
 				// If |observations|= 100 execute insert
 				if (create_new_cube_query.length()>195000) {
 					count = 0;
@@ -3078,9 +2931,6 @@ public class SelectionSPARQL {
 		}
 
 		// GET ONLY THE NEW MEASURES
-		// ArrayList<LDResource> expandedMeasures=new
-		// ArrayList<LDResource>(expanderCubeMeasures);
-		// expandedMeasures.removeAll(originalCubeMeasures);
 		i = 1;
 		// Add measure variables to query
 		for (LDResource ldr : expanderCubeMeasures) {
