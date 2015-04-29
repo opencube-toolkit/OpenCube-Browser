@@ -33,3 +33,4 @@ Currently the OpenCube Browser supports the following functionalities:
 + The user can change the values of the fixed dimensions and thus select a different slice to be presented.
 + The user can perform roll-up and drill-down OLAP operations through dimensions reduction and insertion respectively. The user can add or remove the dimensions of the cube to browse. This functionality is supported only for cubes having at least one ''countable'' measure.
 + The user can create and store a two-dimensional slice of the cube based on the data presented in the browser. 
++ The user can see an Integrated view of multiple compatible cubes.
