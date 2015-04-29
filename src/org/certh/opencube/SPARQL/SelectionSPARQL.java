@@ -24,19 +24,20 @@ public class SelectionSPARQL {
 	// private static LDResource indic = new LDResource(
 	// "http://eurostat.linked-statistics.org/property#indic_en");
 
-	public static List<LDResource> getAllAvailableCubes(String SPARQLservice) {
+	public static List<LDResource> getAllAvailableCubesAndSlices(String SPARQLservice) {
 
 		String getAllAvailableCubes_query = "PREFIX  qb: <http://purl.org/linked-data/cube#>"
 				+ "PREFIX skos: <http://www.w3.org/2004/02/skos/core#>"
 				+ "PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>"
-				+ "select ?dataset ?label where {";
+				+ "SELECT DISTINCT ?dataset ?label where {";
 
 		// If a SPARQL service is defined
 		if (SPARQLservice != null) {
 			getAllAvailableCubes_query += "SERVICE " + SPARQLservice + " { ";
 		}
 
-		getAllAvailableCubes_query += "GRAPH ?cubeGraph{?dataset rdf:type qb:DataSet "
+		getAllAvailableCubes_query += "GRAPH ?cubeGraph{{?dataset rdf:type qb:DataSet}" +
+				"UNION {?dataset rdf:type qb:Slice} "
 				+ "OPTIONAL{?dataset rdfs:label ?label.}} }";
 
 		// If a SPARQL service is defined
@@ -431,8 +432,8 @@ public class SelectionSPARQL {
 		HashMap<LDResource, List<LDResource>> originalCubeDimensionsValues = new HashMap<LDResource, List<LDResource>>();
 
 		// FOR EUROSTAT ONLY -- COMMENT OUT IF NOT NEEDED
-		LDResource obsvalue = new LDResource(
-				"http://purl.org/linked-data/sdmx/2009/measure#obsValue");
+		// LDResource obsvalue = new LDResource(
+		// "http://purl.org/linked-data/sdmx/2009/measure#obsValue");
 		// EUROSTAT END //////////////////////
 
 		for (LDResource cube : compatibleCubes) {
@@ -585,7 +586,7 @@ public class SelectionSPARQL {
 		
 		String getCompatibleCubes_query = "PREFIX  qb: <http://purl.org/linked-data/cube#>"
 				+ "PREFIX skos: <http://www.w3.org/2004/02/skos/core#>"
-				+ "select distinct ?cube where {";
+				+ "select distinct ?cube ?label where {";
 		
 		if (SPARQLservice != null) {
 			getCompatibleCubes_query += "SERVICE " + SPARQLservice	+ " {";
@@ -599,7 +600,7 @@ public class SelectionSPARQL {
 				"<"+initialCube.getURI()+"> qb:dimensionValueCompatible ?linkspec." +
 					"?linkspec qb:compatibleDimension <"+expansionDimension.getURI()+">."+
 					"?linkspec qb:compatibleCube ?cube." +
-					"OPTIONAL{?cube skos:prefLabel|rdfs:label ?label.}}";	
+					"OPTIONAL{GRAPH ?x{?cube skos:prefLabel|rdfs:label ?label.}}}";	
 		
 		if (initialCubeGraph != null) {
 			getCompatibleCubes_query += "}";
@@ -657,6 +658,86 @@ public class SelectionSPARQL {
 		}
 				
 		return compatibleCubesAndDimValues;
+	}
+	
+	
+	public static HashMap<LDResource, List<LDResource>> getLinkAddMeasureCompatibleCubes(
+			LDResource initialCube,	String initialCubeGraph,String initialCubeDSDGraph,
+			String lang, String defaultlang,
+			boolean ignoreLang, String SPARQLservice){
+		
+		String getCompatibleCubes_query = "PREFIX  qb: <http://purl.org/linked-data/cube#>"
+				+ "PREFIX skos: <http://www.w3.org/2004/02/skos/core#>"
+				+ "select distinct ?cube ?label where {";
+		
+		if (SPARQLservice != null) {
+			getCompatibleCubes_query += "SERVICE " + SPARQLservice	+ " {";
+		}
+
+		if (initialCubeGraph != null) {
+			getCompatibleCubes_query += "GRAPH <" + initialCubeGraph + "> {";
+		}
+		
+		getCompatibleCubes_query+=
+				"<"+initialCube.getURI()+"> qb:measureCompatible ?cube." +
+					"OPTIONAL{GRAPH ?x{?cube skos:prefLabel|rdfs:label ?label.}}}";	
+		
+		if (initialCubeGraph != null) {
+			getCompatibleCubes_query += "}";
+		}
+		
+		if (SPARQLservice != null) {
+			getCompatibleCubes_query += "}";
+		}
+		
+		TupleQueryResult res = QueryExecutor.executeSelect(getCompatibleCubes_query);
+
+		List<LDResource> compatibleCubes = new ArrayList<LDResource>();
+
+		try {
+			while (res.hasNext()) {
+				BindingSet bindingSet = res.next();
+				LDResource ldr = new LDResource(bindingSet.getValue("cube").stringValue());
+				
+				if (bindingSet.getValue("label") != null) {
+					ldr.setLabel(bindingSet.getValue("label").stringValue());
+				}
+				
+				//add each compatible cube once - not once for every label
+				if(!compatibleCubes.contains(ldr)){
+					compatibleCubes.add(ldr);
+				}
+			}
+		} catch (QueryEvaluationException e) {
+			e.printStackTrace();
+		}
+		
+	
+		List<LDResource> originalCubeMeasures=CubeSPARQL.getDataCubeMeasure(
+				"<"+initialCube.getURI()+">", initialCubeGraph,initialCubeDSDGraph,
+				lang, defaultlang, ignoreLang, SPARQLservice);
+		
+		HashMap<LDResource, List<LDResource>> compatibleCubesAndMeasures=
+				new HashMap<LDResource, List<LDResource>>();
+		
+		for(LDResource compCube:compatibleCubes){
+			String compCubeURI = "<" + compCube.getURI() + ">";
+			
+			String compCubeGraph = CubeSPARQL.getCubeSliceGraph(compCubeURI,SPARQLservice);
+
+			String compCubeDSDGraph = CubeSPARQL.getCubeStructureGraph(
+					compCubeURI, compCubeGraph, SPARQLservice);
+
+			List<LDResource> compCubeMeasures=CubeSPARQL.getDataCubeMeasure(
+					compCubeURI, compCubeGraph,compCubeDSDGraph,
+					lang, defaultlang, ignoreLang, SPARQLservice);
+			List<LDResource> newMeasures = new ArrayList<LDResource>(compCubeMeasures);
+			newMeasures.removeAll(originalCubeMeasures);
+			compatibleCubesAndMeasures.put(compCube, newMeasures);
+			
+		}
+				
+		return compatibleCubesAndMeasures;
 	}
 	
 	// Get all compatible cubes
@@ -1008,7 +1089,7 @@ public class SelectionSPARQL {
 
 		// The result is cube -> all values of the expansion dimension
 		int numberOfCompatibleCubes = 0;
-		;
+		
 		try {
 			while (res.hasNext()) {
 				BindingSet bindingSet = res.next();
@@ -2665,4 +2746,831 @@ public class SelectionSPARQL {
 
 		return newCube_URI;
 	}
+	
+	
+	public static String mergeCubesAddAttributeValueMinimal(LDResource originalCube,
+			LDResource expanderCube, LDResource expansionDim,
+			String selectedLanguage, String defaultLang, boolean ignoreLang,
+			String SPARQLservice) {
+
+		/////////////////////  ORIGINAL CUBE ///////////////////////////
+
+		String originalCubeURI = "<" + originalCube.getURI() + ">";
+
+		// Get Original Cube Graph
+		String originalCubeGraph = CubeSPARQL.getCubeSliceGraph(
+				originalCubeURI, SPARQLservice);
+
+		// Get original Cube Structure graph
+		String originalCubeDSDGraph = CubeSPARQL.getCubeStructureGraph(
+				originalCubeURI, originalCubeGraph, SPARQLservice);
+		
+		String originalCubeDSD=CubeSPARQL.getCubeDSD(originalCubeURI, originalCubeGraph);
+
+		// Get original Cube Dimensions
+	//	List<LDResource> originalCubeDimensions = CubeSPARQL
+	//			.getDataCubeDimensions(originalCubeURI, originalCubeGraph,
+	//					originalCubeDSDGraph, selectedLanguage, defaultLang,
+	//					ignoreLang, SPARQLservice);
+
+		// Get original Cube Measures
+	//	List<LDResource> originalCubeMeasures = CubeSPARQL.getDataCubeMeasure(
+	//			originalCubeURI, originalCubeGraph, originalCubeDSDGraph,
+	//			selectedLanguage, defaultLang, ignoreLang, SPARQLservice);
+
+		
+		List<LDResource> originalCubeExpansionDimensionValues=
+				CubeSPARQL.getDimensionValues(expansionDim.getURI(),
+						originalCubeURI, originalCubeGraph, originalCubeDSDGraph,
+						selectedLanguage, defaultLang, ignoreLang, SPARQLservice); 
+		
+	//	HashMap<LDResource, List<LDResource>> originalCubeAllDimensionsValues = CubeHandlingUtils
+	//			.getDimsValues(originalCubeDimensions, originalCubeURI,
+	//					originalCubeGraph, originalCubeDSDGraph, false,
+	//					selectedLanguage, defaultLang, ignoreLang,
+	//					SPARQLservice);
+
+		// ///////// EXPANDER CUBE ///////////////////////////
+
+		String expanderCubeURI = "<" + expanderCube.getURI() + ">";
+
+		// Get Original Cube Graph
+		String expanderCubeGraph = CubeSPARQL.getCubeSliceGraph(
+				expanderCubeURI, SPARQLservice);
+
+		// Get original Cube Structure graph
+		String expanderCubeDSDGraph = CubeSPARQL.getCubeStructureGraph(
+				expanderCubeURI, expanderCubeGraph, SPARQLservice);
+
+		// Get original Cube Dimensions
+		List<LDResource> expanderCubeDimensions = CubeSPARQL
+				.getDataCubeDimensions(expanderCubeURI, expanderCubeGraph,
+						expanderCubeDSDGraph, selectedLanguage, defaultLang,
+						ignoreLang, SPARQLservice);
+
+		// Get original Cube Measures
+		List<LDResource> expanderCubeMeasures = CubeSPARQL.getDataCubeMeasure(
+				expanderCubeURI, expanderCubeGraph, expanderCubeDSDGraph,
+				selectedLanguage, defaultLang, ignoreLang, SPARQLservice);
+
+		
+		List<LDResource>expanderCubeExpansionDimensionValues=
+				CubeSPARQL.getDimensionValues(expansionDim.getURI(),
+						expanderCubeURI, expanderCubeGraph, expanderCubeDSDGraph,
+						selectedLanguage, defaultLang, ignoreLang, SPARQLservice); 
+		
+	//	HashMap<LDResource, List<LDResource>> expanderCubeAllDimensionsValues = CubeHandlingUtils
+	//			.getDimsValues(expanderCubeDimensions, expanderCubeURI,
+	//					expanderCubeGraph, expanderCubeDSDGraph, false,
+	//					selectedLanguage, defaultLang, ignoreLang,
+	//					SPARQLservice);
+
+		// create random DSD, Cube URI and Cube Graph URI
+		Random rand = new Random();
+		long rnd = Math.abs(rand.nextLong());
+
+	//	String newDSD_URI = "<http://www.fluidops.com/resource/dsd_" + rnd	+ ">";
+		String newCube_URI = "<http://www.fluidops.com/resource/cube_" + rnd+ ">";
+	//	String newCubeGraph_URI = "<http://www.fluidops.com/resource/graph_"+ rnd + ">";
+/*
+		// Add new DSD
+		// ADD THE NEW DSD AT THE ORIGINAL CUBE DSD GRAPH
+		String create_new_merged_dsd_query = "PREFIX qb: <http://purl.org/linked-data/cube#>"
+				+ "PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>"
+				+ "INSERT DATA  {";
+
+		if (SPARQLservice != null) {
+			create_new_merged_dsd_query += "SERVICE " + SPARQLservice + " {";
+		}
+
+		if (originalCubeDSDGraph != null) {
+			create_new_merged_dsd_query += "GRAPH <" + originalCubeDSDGraph
+					+ "> {";
+		}
+
+		create_new_merged_dsd_query += newDSD_URI
+				+ " rdf:type qb:DataStructureDefinition.";
+
+		// Add dimensions to DSD
+		for (LDResource ldr : originalCubeDimensions) {
+			rnd = Math.abs(rand.nextLong());
+			String newComponentSpecification_URI = "<http://www.fluidops.com/resource/componentSpecification_"
+					+ rnd + ">";
+			create_new_merged_dsd_query += newDSD_URI + " qb:component "
+					+ newComponentSpecification_URI + "."
+					+ newComponentSpecification_URI + " qb:dimension <"
+					+ ldr.getURI() + ">.";
+		}
+
+		// //Set<LDResource> mergedMeasures=new
+		// HashSet<LDResource>(originalCubeMeasures);
+		// mergedMeasures.addAll(expanderCubeMeasures);
+		// Add measures to DSD
+		for (LDResource m : originalCubeMeasures) {
+			rnd = Math.abs(rand.nextLong());
+			String newComponentSpecification_URI = "<http://www.fluidops.com/resource/componentSpecification_"
+					+ rnd + ">";
+			create_new_merged_dsd_query += newDSD_URI + " qb:component "
+					+ newComponentSpecification_URI + "."
+					+ newComponentSpecification_URI + " qb:measure <"
+					+ m.getURI() + ">.";
+		}
+
+		create_new_merged_dsd_query += "} ";
+
+		if (originalCubeDSDGraph != null) {
+			create_new_merged_dsd_query += "}";
+		}
+
+		if (SPARQLservice != null) {
+			create_new_merged_dsd_query += "}";
+		}
+
+		QueryExecutor.executeUPDATE(create_new_merged_dsd_query);
+*/
+		// GET ORIGINAL CUBE OBSERVATIONS
+		String getOriginalCubeObservations_query = "PREFIX qb: <http://purl.org/linked-data/cube#>"
+				+ "PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>"
+				+ "Select ?obs ";
+		int i = 1;
+
+/*		// Add dimension variables to query
+		for (LDResource ldr : originalCubeDimensions) {
+			getOriginalCubeObservations_query += "?dim" + i + " ";
+			i++;
+		}
+
+		i = 1;
+		// Add dimension variables to query
+		for (LDResource ldr : originalCubeMeasures) {
+			getOriginalCubeObservations_query += "?measure" + i + " ";
+			i++;
+		}*/
+
+		getOriginalCubeObservations_query += "where{";
+		if (SPARQLservice != null) {
+			getOriginalCubeObservations_query += "SERVICE " + SPARQLservice
+					+ " {";
+		}
+
+		if (originalCubeGraph != null) {
+			getOriginalCubeObservations_query += "GRAPH <" + originalCubeGraph
+					+ "> {";
+		}
+
+		getOriginalCubeObservations_query += "?obs qb:dataSet "	+ originalCubeURI + ".";
+
+	/*	i = 1;
+		for (LDResource ldr : originalCubeDimensions) {
+			getOriginalCubeObservations_query += "?obs <" + ldr.getURI()
+					+ "> ?dim" + i + ".";
+			i++;
+		}
+
+		i = 1;
+		for (LDResource m : originalCubeMeasures) {
+			getOriginalCubeObservations_query += "?obs <" + m.getURI()
+					+ "> ?measure" + i + ".";
+			i++;
+		}*/
+
+		getOriginalCubeObservations_query += "}";
+
+		if (originalCubeGraph != null) {
+			getOriginalCubeObservations_query += "}";
+		}
+
+		if (SPARQLservice != null) {
+			getOriginalCubeObservations_query += "}";
+		}
+
+		TupleQueryResult res = QueryExecutor
+				.executeSelect(getOriginalCubeObservations_query);
+
+		// CREATE NEW MERGED CUBE
+		String create_new_cube_query = "PREFIX qb: <http://purl.org/linked-data/cube#>"
+				+ "PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>"
+				+ "INSERT DATA  {";
+
+		if (SPARQLservice != null) {
+			create_new_cube_query += "SERVICE " + SPARQLservice + " {";
+		}
+
+		//The new cube has the same structure as the original
+		create_new_cube_query += "GRAPH <" +originalCubeGraph  + "> {"
+				+ newCube_URI + " rdf:type qb:DataSet." + newCube_URI
+				+ " qb:structure <" + originalCubeDSD + ">.";
+
+		int count = 0;
+		int obsCount = 1;
+		try {
+
+			// Store original cube observations
+			List<BindingSet> bs = new ArrayList<BindingSet>();
+
+			while (res.hasNext()) {
+				bs.add(res.next());
+			}
+
+			// Create new observations for the new merged cube.
+			// Insert cubes in sets of 100
+
+			for (BindingSet bindingSet : bs) {
+
+				// Observation URI
+			//	String newObservation_URI = "<http://www.fluidops.com/resource/observation_"
+			//			+ obsCount + ">";
+			//	create_new_cube_query += newObservation_URI
+			//			+ " rdf:type qb:Observation." + newObservation_URI
+			//			+ " qb:dataSet " + newCube_URI + ".";
+
+				create_new_cube_query +=  "<"+bindingSet.getValue("obs")
+						+ "> qb:dataSet " + newCube_URI + ".";
+			/*	i = 1;
+				for (LDResource ldr : originalCubeDimensions) {
+					String dimValue = bindingSet.getValue("dim" + i)
+							.stringValue();
+					// Is URI
+					if (dimValue.contains("http")) {
+						create_new_cube_query += newObservation_URI + " <"
+								+ ldr.getURI() + "> <" + dimValue + ">.";
+
+						// Is literal
+					} else {
+						create_new_cube_query += newObservation_URI + " <"
+								+ ldr.getURI() + "> \"" + dimValue + "\".";
+					}
+					i++;
+				}
+
+				i = 1;
+				for (LDResource ldr : originalCubeMeasures) {
+					String measureValue = bindingSet.getValue("measure" + i)
+							.stringValue();
+					// Is URI
+					if (measureValue.contains("http")) {
+						create_new_cube_query += newObservation_URI + " <"
+								+ ldr.getURI() + "> <" + measureValue + ">.";
+
+						// Is literal
+					} else {
+						create_new_cube_query += newObservation_URI + " <"
+								+ ldr.getURI() + "> \"" + measureValue + "\".";
+					}
+					i++;
+				}
+*/
+				// If |observations|= 100 execute insert
+				if (create_new_cube_query.length()>195000) {
+					count = 0;
+					create_new_cube_query += "}}";
+
+					if (SPARQLservice != null) {
+						create_new_cube_query += "}";
+					}
+					System.out.println(create_new_cube_query.length());
+					QueryExecutor.executeUPDATE(create_new_cube_query);
+					
+					// Initialize query to insert more observations
+					create_new_cube_query = "PREFIX qb: <http://purl.org/linked-data/cube#>"
+							+ "PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>"
+							+ "INSERT DATA  {";
+
+					if (SPARQLservice != null) {
+						create_new_cube_query += "SERVICE " + SPARQLservice
+								+ " {";
+					}
+
+					create_new_cube_query += "GRAPH <" + originalCubeGraph + "> {";
+				} else {
+					count++;
+				}
+				obsCount++;
+			}
+
+		} catch (QueryEvaluationException e) {
+			e.printStackTrace();
+		}
+
+		// If there are observations not yet inserted
+		if (count > 0) {
+			create_new_cube_query += "}}";
+
+			if (SPARQLservice != null) {
+				create_new_cube_query += "}";
+			}
+			QueryExecutor.executeUPDATE(create_new_cube_query);
+
+		}
+
+		// //////////////////////////////////////////////////////////
+
+		// GET EXPANDER CUBE OBSERVATIONS
+		String getExpanderCubeObservations_query = "PREFIX qb: <http://purl.org/linked-data/cube#>"
+				+ "PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>"
+				+ "Select ";
+		i = 1;
+
+		// Add dimension variables to query
+		for (LDResource ldr : expanderCubeDimensions) {
+			getExpanderCubeObservations_query += "?dim" + i + " ";
+			i++;
+		}
+
+		// GET ONLY THE NEW MEASURES
+		// ArrayList<LDResource> expandedMeasures=new
+		// ArrayList<LDResource>(expanderCubeMeasures);
+		// expandedMeasures.removeAll(originalCubeMeasures);
+		i = 1;
+		// Add measure variables to query
+		for (LDResource ldr : expanderCubeMeasures) {
+			getExpanderCubeObservations_query += "?measure" + i + " ";
+			i++;
+		}
+
+		getExpanderCubeObservations_query += "where{";
+		if (SPARQLservice != null) {
+			getExpanderCubeObservations_query += "SERVICE " + SPARQLservice
+					+ " {";
+		}
+
+		if (expanderCubeGraph != null) {
+			getExpanderCubeObservations_query += "GRAPH <" + expanderCubeGraph
+					+ "> {";
+		}
+
+		getExpanderCubeObservations_query += "?obs qb:dataSet "
+				+ expanderCubeURI + ".";
+
+		i = 1;
+		for (LDResource ldr : expanderCubeDimensions) {
+			getExpanderCubeObservations_query += "?obs <" + ldr.getURI()
+					+ "> ?dim" + i + ".";
+			i++;
+		}
+
+		i = 1;
+		for (LDResource m : expanderCubeMeasures) {
+			getExpanderCubeObservations_query += "?obs <" + m.getURI()
+					+ "> ?measure" + i + ".";
+			i++;
+		}
+
+		getExpanderCubeObservations_query += "}";
+
+		if (expanderCubeGraph != null) {
+			getExpanderCubeObservations_query += "}";
+		}
+
+		if (SPARQLservice != null) {
+			getExpanderCubeObservations_query += "}";
+		}
+
+		res = QueryExecutor.executeSelect(getExpanderCubeObservations_query);
+
+		// INSERT NEW MEAURES TO MERGED CUBE
+		create_new_cube_query = "PREFIX qb: <http://purl.org/linked-data/cube#>"
+				+ "PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>"
+				+ "INSERT DATA  {";
+
+		if (SPARQLservice != null) {
+			create_new_cube_query += "SERVICE " + SPARQLservice + " {";
+		}
+
+		create_new_cube_query += "GRAPH <" + originalCubeGraph + "> {";
+
+		count = 0;
+		try {
+
+			// Store expander cube observations
+			List<BindingSet> bs = new ArrayList<BindingSet>();
+
+			while (res.hasNext()) {
+				bs.add(res.next());
+			}
+
+			// Create new observations for the new merged cube.
+			// Insert cubes in sets of 100
+
+			// Add the values of the expansion dimension of the expander cube
+			List<LDResource> expansionDimNewValues = new ArrayList<LDResource>(
+					expanderCubeExpansionDimensionValues);
+
+			// Remove the values of the expansion dimension of the original cube
+			expansionDimNewValues.removeAll(originalCubeExpansionDimensionValues);
+
+			int expansionDimIndex = expanderCubeDimensions
+					.indexOf(expansionDim) + 1;
+
+			for (BindingSet bindingSet : bs) {
+
+				// Get the value of the expansion dim of the observation
+				LDResource expansionValueLdr = new LDResource(bindingSet
+						.getValue("dim" + expansionDimIndex).stringValue());
+
+				// If the observation has a NEW value at the expansion dimension
+				if (expansionDimNewValues.contains(expansionValueLdr)) {
+
+					// Observation URI
+					String newObservation_URI = "<http://www.fluidops.com/resource/observation_"
+							+ obsCount + ">";
+					create_new_cube_query += newObservation_URI
+							+ " rdf:type qb:Observation." + newObservation_URI
+							+ " qb:dataSet " + newCube_URI + ".";
+
+					i = 1;
+					for (LDResource ldr : expanderCubeDimensions) {
+						String dimValue = bindingSet.getValue("dim" + i)
+								.stringValue();
+						// Is URI
+						if (dimValue.contains("http")) {
+							create_new_cube_query += newObservation_URI + " <"
+									+ ldr.getURI() + "> <" + dimValue + ">.";
+
+						// Is literal
+						} else {
+							create_new_cube_query += newObservation_URI + " <"
+									+ ldr.getURI() + "> \"" + dimValue + "\".";
+						}
+						i++;
+					}
+
+					// NA DW PWS THA BALW TA MULTIPLE MEASURES
+					i = 1;
+					for (LDResource ldr : expanderCubeMeasures) {
+						String measureValue = bindingSet
+								.getValue("measure" + i).stringValue();
+						// Is URI
+						if (measureValue.contains("http")) {
+							create_new_cube_query += newObservation_URI + " <"
+									+ ldr.getURI() + "> <" + measureValue
+									+ ">.";
+
+							// Is literal
+						} else {
+							create_new_cube_query += newObservation_URI + " <"
+									+ ldr.getURI() + "> \"" + measureValue
+									+ "\".";
+						}
+						i++;
+					}
+
+					// If |observations|= 100 execute insert
+					//MAX SPARQL SIZE 200000
+					if (create_new_cube_query.length()>195000) {
+						count = 0;
+						create_new_cube_query += "}}";
+
+						if (SPARQLservice != null) {
+							create_new_cube_query += "}";
+						}
+						QueryExecutor.executeUPDATE(create_new_cube_query);
+
+						System.out.println(create_new_cube_query.length());
+						// Initialize query to insert more observations
+						create_new_cube_query = "PREFIX qb: <http://purl.org/linked-data/cube#>"
+								+ "PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>"
+								+ "INSERT DATA  {";
+
+						if (SPARQLservice != null) {
+							create_new_cube_query += "SERVICE " + SPARQLservice
+									+ " {";
+						}
+
+						create_new_cube_query += "GRAPH <" + originalCubeGraph + "> {";
+					} else {
+						count++;
+					}
+					obsCount++;
+				}
+			}
+
+		} catch (QueryEvaluationException e) {
+			e.printStackTrace();
+		}
+
+		// If there are observations not yet inserted
+		if (count > 0) {
+			create_new_cube_query += "}}";
+
+			if (SPARQLservice != null) {
+				create_new_cube_query += "}";
+			}
+			QueryExecutor.executeUPDATE(create_new_cube_query);
+		}
+
+		return newCube_URI;
+	}
+	
+	public static String mergeCubesAddAttributeValueExtraMinimal(LDResource originalCube,
+			LDResource expanderCube, LDResource expansionDim,
+			String selectedLanguage, String defaultLang, boolean ignoreLang,
+			String SPARQLservice) {
+
+		/////////////////////  ORIGINAL CUBE ///////////////////////////
+
+		String originalCubeURI = "<" + originalCube.getURI() + ">";
+
+		// Get Original Cube Graph
+		String originalCubeGraph = CubeSPARQL.getCubeSliceGraph(
+				originalCubeURI, SPARQLservice);
+
+		// Get original Cube Structure graph
+		String originalCubeDSDGraph = CubeSPARQL.getCubeStructureGraph(
+				originalCubeURI, originalCubeGraph, SPARQLservice);
+		
+		String originalCubeDSD=CubeSPARQL.getCubeDSD(originalCubeURI, originalCubeGraph);
+
+		
+		List<LDResource> originalCubeExpansionDimensionValues=
+				CubeSPARQL.getDimensionValues(expansionDim.getURI(),
+						originalCubeURI, originalCubeGraph, originalCubeDSDGraph,
+						selectedLanguage, defaultLang, ignoreLang, SPARQLservice); 
+	
+
+		// ///////// EXPANDER CUBE ///////////////////////////
+
+		String expanderCubeURI = "<" + expanderCube.getURI() + ">";
+
+		// Get Original Cube Graph
+		String expanderCubeGraph = CubeSPARQL.getCubeSliceGraph(
+				expanderCubeURI, SPARQLservice);
+
+		// Get original Cube Structure graph
+		String expanderCubeDSDGraph = CubeSPARQL.getCubeStructureGraph(
+				expanderCubeURI, expanderCubeGraph, SPARQLservice);
+
+		// Get original Cube Dimensions
+		List<LDResource> expanderCubeDimensions = CubeSPARQL
+				.getDataCubeDimensions(expanderCubeURI, expanderCubeGraph,
+						expanderCubeDSDGraph, selectedLanguage, defaultLang,
+						ignoreLang, SPARQLservice);
+
+		// Get original Cube Measures
+		List<LDResource> expanderCubeMeasures = CubeSPARQL.getDataCubeMeasure(
+				expanderCubeURI, expanderCubeGraph, expanderCubeDSDGraph,
+				selectedLanguage, defaultLang, ignoreLang, SPARQLservice);
+
+		
+		List<LDResource>expanderCubeExpansionDimensionValues=
+				CubeSPARQL.getDimensionValues(expansionDim.getURI(),
+						expanderCubeURI, expanderCubeGraph, expanderCubeDSDGraph,
+						selectedLanguage, defaultLang, ignoreLang, SPARQLservice); 
+		
+		// create random DSD, Cube URI and Cube Graph URI
+		Random rand = new Random();
+		long rnd = Math.abs(rand.nextLong());
+
+
+		String newCube_URI = "<http://www.fluidops.com/resource/cube_" + rnd+ ">";
+
+		// GET ORIGINAL CUBE OBSERVATIONS
+		String getOriginalCubeObservations_query = "PREFIX qb: <http://purl.org/linked-data/cube#>"
+				+ "PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>"
+				+ "Select ?obs ";
+		int i = 1;
+
+/*		// Add dimension variables to query
+		for (LDResource ldr : originalCubeDimensions) {
+			getOriginalCubeObservations_query += "?dim" + i + " ";
+			i++;
+		}
+
+		i = 1;
+		// Add dimension variables to query
+		for (LDResource ldr : originalCubeMeasures) {
+			getOriginalCubeObservations_query += "?measure" + i + " ";
+			i++;
+		}*/
+
+		getOriginalCubeObservations_query += "where{";
+		if (SPARQLservice != null) {
+			getOriginalCubeObservations_query += "SERVICE " + SPARQLservice
+					+ " {";
+		}
+
+		if (originalCubeGraph != null) {
+			getOriginalCubeObservations_query += "GRAPH <" + originalCubeGraph
+					+ "> {";
+		}
+
+		getOriginalCubeObservations_query += "?obs qb:dataSet "	+ originalCubeURI + ".";
+
+	
+		getOriginalCubeObservations_query += "}";
+
+		if (originalCubeGraph != null) {
+			getOriginalCubeObservations_query += "}";
+		}
+
+		if (SPARQLservice != null) {
+			getOriginalCubeObservations_query += "}";
+		}
+
+		TupleQueryResult res = QueryExecutor
+				.executeSelect(getOriginalCubeObservations_query);
+
+		// CREATE NEW MERGED CUBE
+		String create_new_cube_query = "PREFIX qb: <http://purl.org/linked-data/cube#>"
+				+ "PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>"
+				+ "INSERT DATA  {";
+
+		if (SPARQLservice != null) {
+			create_new_cube_query += "SERVICE " + SPARQLservice + " {";
+		}
+
+		//The new cube has the same structure as the original
+		create_new_cube_query += "GRAPH <" +originalCubeGraph  + "> {"
+				+ newCube_URI + " rdf:type qb:DataSet." + newCube_URI
+				+ " qb:structure <" + originalCubeDSD + ">.";
+
+		int count = 0;
+		int obsCount = 1;
+		try {
+
+			// Store original cube observations
+			List<BindingSet> bs = new ArrayList<BindingSet>();
+
+			while (res.hasNext()) {
+				bs.add(res.next());
+			}
+
+			// Create new observations for the new merged cube.
+			// Insert cubes in sets of 100
+
+			for (BindingSet bindingSet : bs) {
+
+				create_new_cube_query +=  "<"+bindingSet.getValue("obs")
+						+ "> qb:dataSet " + newCube_URI + ".";
+		
+				// If |observations|= 100 execute insert
+				if (create_new_cube_query.length()>195000) {
+					count = 0;
+					create_new_cube_query += "}}";
+
+					if (SPARQLservice != null) {
+						create_new_cube_query += "}";
+					}
+					System.out.println(create_new_cube_query.length());
+					QueryExecutor.executeUPDATE(create_new_cube_query);
+					
+					// Initialize query to insert more observations
+					create_new_cube_query = "PREFIX qb: <http://purl.org/linked-data/cube#>"
+							+ "PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>"
+							+ "INSERT DATA  {";
+
+					if (SPARQLservice != null) {
+						create_new_cube_query += "SERVICE " + SPARQLservice
+								+ " {";
+					}
+
+					create_new_cube_query += "GRAPH <" + originalCubeGraph + "> {";
+				} else {
+					count++;
+				}
+				obsCount++;
+			}
+
+		} catch (QueryEvaluationException e) {
+			e.printStackTrace();
+		}
+
+		// If there are observations not yet inserted
+		if (count > 0) {
+			create_new_cube_query += "}}";
+
+			if (SPARQLservice != null) {
+				create_new_cube_query += "}";
+			}
+			QueryExecutor.executeUPDATE(create_new_cube_query);
+
+		}
+
+		// //////////////////////////////////////////////////////////
+
+		// GET EXPANDER CUBE OBSERVATIONS
+		String getExpanderCubeObservations_query = "PREFIX qb: <http://purl.org/linked-data/cube#>"
+				+ "PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>"
+				+ "Select ?obs ?expvalue ";
+		
+		getExpanderCubeObservations_query += "where{";
+		if (SPARQLservice != null) {
+			getExpanderCubeObservations_query += "SERVICE " + SPARQLservice
+					+ " {";
+		}
+
+		if (expanderCubeGraph != null) {
+			getExpanderCubeObservations_query += "GRAPH <" + expanderCubeGraph
+					+ "> {";
+		}
+
+		getExpanderCubeObservations_query += "?obs qb:dataSet "	+ expanderCubeURI + ".";
+
+		getExpanderCubeObservations_query += "?obs <" + expansionDim.getURI()	+ "> ?expvalue.";
+		
+		getExpanderCubeObservations_query += "}";
+
+		if (expanderCubeGraph != null) {
+			getExpanderCubeObservations_query += "}";
+		}
+
+		if (SPARQLservice != null) {
+			getExpanderCubeObservations_query += "}";
+		}
+
+		res = QueryExecutor.executeSelect(getExpanderCubeObservations_query);
+
+		// INSERT NEW MEAURES TO MERGED CUBE
+		create_new_cube_query = "PREFIX qb: <http://purl.org/linked-data/cube#>"
+				+ "PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>"
+				+ "INSERT DATA  {";
+
+		if (SPARQLservice != null) {
+			create_new_cube_query += "SERVICE " + SPARQLservice + " {";
+		}
+
+		create_new_cube_query += "GRAPH <" + originalCubeGraph + "> {";
+
+		count = 0;
+		try {
+
+			// Store expander cube observations
+			List<BindingSet> bs = new ArrayList<BindingSet>();
+
+			while (res.hasNext()) {
+				bs.add(res.next());
+			}
+
+			// Create new observations for the new merged cube.
+			// Insert cubes in sets of 100
+
+			// Add the values of the expansion dimension of the expander cube
+			List<LDResource> expansionDimNewValues = new ArrayList<LDResource>(
+					expanderCubeExpansionDimensionValues);
+
+			// Remove the values of the expansion dimension of the original cube
+			expansionDimNewValues.removeAll(originalCubeExpansionDimensionValues);
+
+			int expansionDimIndex = expanderCubeDimensions
+					.indexOf(expansionDim) + 1;
+
+			for (BindingSet bindingSet : bs) {
+
+				// Get the value of the expansion dim of the observation
+				LDResource expansionValueLdr = new LDResource(bindingSet.getValue("expvalue").stringValue());
+
+				// If the observation has a NEW value at the expansion dimension
+				if (expansionDimNewValues.contains(expansionValueLdr)) {
+
+
+					create_new_cube_query +=  "<"+bindingSet.getValue("obs")+ "> qb:dataSet " + newCube_URI + ".";
+				
+					// If |observations|= 100 execute insert
+					//MAX SPARQL SIZE 200000
+					if (create_new_cube_query.length()>195000) {
+						count = 0;
+						create_new_cube_query += "}}";
+
+						if (SPARQLservice != null) {
+							create_new_cube_query += "}";
+						}
+						QueryExecutor.executeUPDATE(create_new_cube_query);
+
+						System.out.println(create_new_cube_query.length());
+						// Initialize query to insert more observations
+						create_new_cube_query = "PREFIX qb: <http://purl.org/linked-data/cube#>"
+								+ "PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>"
+								+ "INSERT DATA  {";
+
+						if (SPARQLservice != null) {
+							create_new_cube_query += "SERVICE " + SPARQLservice
+									+ " {";
+						}
+
+						create_new_cube_query += "GRAPH <" + originalCubeGraph + "> {";
+					} else {
+						count++;
+					}
+					obsCount++;
+				}
+			}
+
+		} catch (QueryEvaluationException e) {
+			e.printStackTrace();
+		}
+
+		// If there are observations not yet inserted
+		if (count > 0) {
+			create_new_cube_query += "}}";
+
+			if (SPARQLservice != null) {
+				create_new_cube_query += "}";
+			}
+			QueryExecutor.executeUPDATE(create_new_cube_query);
+		}
+
+		return newCube_URI;
+	}
+
+
 }

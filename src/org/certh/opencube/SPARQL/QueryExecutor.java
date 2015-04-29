@@ -84,7 +84,7 @@ public class QueryExecutor {
 
 			QueryBuilder<Update> queryBuilder = QueryBuilder.createUpdate(query);
 
-			System.out.println(query);
+		//	System.out.println(query);
 			long startTime = System.currentTimeMillis();
 
 			try {
@@ -100,7 +100,7 @@ public class QueryExecutor {
 
 			long stopTime = System.currentTimeMillis();
 			long elapsedTime = stopTime - startTime;
-			System.out.println("Query Time: " + elapsedTime);
+		//	System.out.println("Query Time: " + elapsedTime);
 
 		}
 

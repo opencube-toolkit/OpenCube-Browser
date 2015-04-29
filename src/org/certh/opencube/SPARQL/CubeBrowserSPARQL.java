@@ -25,7 +25,7 @@ public class CubeBrowserSPARQL {
 		i=1;
 		// Add variables ?dim to SPARQL query
 		for (LDResource meas : selectedMeasures) {
-			sparql_query += "?measure" + i + " ";
+			sparql_query += "?measure_" + meas.getLastPartOfURI() + " ";
 			i++;
 		}
 
@@ -68,7 +68,7 @@ public class CubeBrowserSPARQL {
 
 		j=1;
 		for(LDResource meas:selectedMeasures){
-			sparql_query += "?obs  <" + meas.getURI() + "> ?measure"+j+".";
+			sparql_query += "?obs  <" + meas.getURI() + "> ?measure_"+meas.getLastPartOfURI()+".";
 			j++;
 		}
 		sparql_query+="}";

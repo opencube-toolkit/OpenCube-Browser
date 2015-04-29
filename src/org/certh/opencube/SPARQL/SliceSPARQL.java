@@ -635,7 +635,7 @@ public class SliceSPARQL {
 	// TO DO ADD SPARQL SERVICE
 	public static String createCubeSlice(String cubeURI, String cubeGraphURI,
 			HashMap<LDResource, LDResource> sliceFixedDimensions,
-			List<LDResource> sliceObservation) {
+			List<LDResource> sliceObservation,String SPARQLservice) {
 
 		// create random slice graph
 		Random rand = new Random();
@@ -658,8 +658,13 @@ public class SliceSPARQL {
 		// INSERT SLICE STRUCTURE QUERY
 		String insert_slice_structure_query = "PREFIX qb: <http://purl.org/linked-data/cube#>"
 				+ "PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>"
-				+ "INSERT DATA  { graph "
-				+ sliceGraph+ " {"
+				+ "INSERT DATA  {";
+		
+		if (SPARQLservice != null) {
+			insert_slice_structure_query += "SERVICE " + SPARQLservice + " {";
+		}
+		
+		insert_slice_structure_query+="graph "	+ sliceGraph+ " {"
 				+ sliceKeyURI+ " rdf:type qb:SliceKey. ";
 
 		// Add fixed dimensions to slice-key structure
@@ -692,6 +697,10 @@ public class SliceSPARQL {
 			insert_slice_structure_query += sliceURI + " <" + ldr.getURI()+ "> " + dimensionValue + ".";
 		}
 
+		if (SPARQLservice != null) {
+			insert_slice_structure_query += "}";
+		}
+		
 		insert_slice_structure_query += "}}";
 		QueryExecutor.executeUPDATE(insert_slice_structure_query);
 
@@ -699,7 +708,14 @@ public class SliceSPARQL {
 		// INSERT SLICE DATA QUERY
 		String insert_slice_data_query = "PREFIX qb: <http://purl.org/linked-data/cube#>"
 				+ "PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>"
-				+ "INSERT DATA  { graph " + sliceGraph + " {";
+				+ "INSERT DATA  { ";
+		
+		
+		if (SPARQLservice != null) {
+			insert_slice_data_query += "SERVICE " + SPARQLservice + " {";
+		}
+		
+		insert_slice_data_query+="graph " + sliceGraph + " {";
 
 		int i = 0;
 		for (LDResource ldr : sliceObservation) {
@@ -709,14 +725,28 @@ public class SliceSPARQL {
 			// Execute an INSERT for every 1000 observations
 			if (i == 1000) {
 				i = 0;
+				
+				if (SPARQLservice != null) {
+					insert_slice_data_query += "}";
+				}
 				insert_slice_data_query += "}}";
 				QueryExecutor.executeUPDATE(insert_slice_data_query);
 
 				// Empty the Insert query and re-initialize it
 				insert_slice_data_query = "PREFIX qb: <http://purl.org/linked-data/cube#>"
 						+ "PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>"
-						+ "INSERT DATA  { graph " + sliceGraph + " {";
+						+ "INSERT DATA  { ";
+				
+				if (SPARQLservice != null) {
+					insert_slice_data_query += "SERVICE " + SPARQLservice + " {";
+				}
+				
+				insert_slice_data_query+=" graph " + sliceGraph + " {";
 			}
+		}
+		
+		if (SPARQLservice != null) {
+			insert_slice_data_query += "}";
 		}
 
 		insert_slice_data_query += "}}";

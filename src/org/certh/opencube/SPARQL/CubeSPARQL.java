@@ -26,7 +26,7 @@ public class CubeSPARQL {
 			String getCubeDimensions_query = "PREFIX qb: <http://purl.org/linked-data/cube#>"
 					+ "PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>"
 					+ "PREFIX skos: <http://www.w3.org/2004/02/skos/core#>"
-					+ "select  distinct ?dim ?label where {";
+					+ "select  distinct ?dim ?label1 ?label2 where {";
 
 			// If a SPARQL service is defined
 			if (SPARQLservice != null) {
@@ -52,7 +52,8 @@ public class CubeSPARQL {
 			
 			getCubeDimensions_query += "?dsd qb:component  ?cs."
 					+ "?cs qb:dimension ?dim." +
-					"OPTIONAL{?dim qb:concept ?cons.?cons skos:prefLabel|rdfs:label ?label.}}"; 
+					"OPTIONAL{?dim qb:concept ?cons.?cons skos:prefLabel|rdfs:label ?label1.}"+
+					"OPTIONAL{?dim rdfs:comment ?label2.}}"; 
 						
 			// If cube DSD graph is defined
 			if (cubeDSDGraph != null) {
@@ -75,8 +76,13 @@ public class CubeSPARQL {
 					LDResource ldr = new LDResource(bindingSet.getValue("dim").stringValue());
 
 					// check if there is a label (rdfs:label or skos:prefLabel)
-					if (bindingSet.getValue("label") != null) {
-						ldr.setLabelLiteral((Literal)bindingSet.getValue("label"));							
+					if (bindingSet.getValue("label1") != null) {
+						ldr.setLabelLiteral((Literal)bindingSet.getValue("label1"));							
+					}
+					
+					// check if there is a label (rdfs:label or skos:prefLabel)
+					if (bindingSet.getValue("label2") != null) {
+						ldr.setLabelLiteral((Literal)bindingSet.getValue("label2"));							
 					}
 					
 					//Add the first instance of the dimension (regardless of the language)
@@ -127,7 +133,7 @@ public class CubeSPARQL {
 			String getCubeMeasure_query = "PREFIX qb: <http://purl.org/linked-data/cube#>"
 					+ "PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>"
 					+ "PREFIX skos: <http://www.w3.org/2004/02/skos/core#>"
-					+ "select  distinct ?dim ?label where {";
+					+ "select  distinct ?dim ?label1 ?label2 where {";
 
 			// If a SPARQL service is defined
 			if (SPARQLservice != null) {
@@ -153,7 +159,8 @@ public class CubeSPARQL {
 
 			getCubeMeasure_query += "?dsd qb:component  ?cs."
 					+ "?cs qb:measure  ?dim."+
-					"OPTIONAL{?dim qb:concept ?cons.?cons skos:prefLabel|rdfs:label ?label.}}";
+					"OPTIONAL{?dim qb:concept ?cons.?cons skos:prefLabel|rdfs:label ?label1.}"+
+					"OPTIONAL{?dim rdfs:comment ?label2.}}";
 						
 			// If a cube DSD graph is defined
 			if (cubeDSDGraph != null) {
@@ -176,8 +183,13 @@ public class CubeSPARQL {
 					LDResource ldr = new LDResource(bindingSet.getValue("dim").stringValue());
 
 					// check if there is a label (rdfs:label or skos:prefLabel)
-					if (bindingSet.getValue("label") != null) {
-						ldr.setLabelLiteral((Literal)bindingSet.getValue("label"));							
+					if (bindingSet.getValue("label1") != null) {
+						ldr.setLabelLiteral((Literal)bindingSet.getValue("label1"));							
+					}
+					
+					// check if there is a label (rdfs:label or skos:prefLabel)
+					if (bindingSet.getValue("label2") != null) {
+						ldr.setLabelLiteral((Literal)bindingSet.getValue("label2"));							
 					}
 					
 					//Add only once a dimension (not one for each available label)
@@ -271,8 +283,13 @@ public class CubeSPARQL {
 					if (bindingSet.getValue("label") != null) {
 						ldr.setLabelLiteral((Literal)bindingSet.getValue("label"));							
 					}
-					
+				//	System.out.println(ldr.getLabel());
+				//	System.out.println(ldr.getURI());
+				//	System.out.println(ldr.getLanguage());
+				//	System.out.println(lang);
+				//	System.out.println("------------------");
 					//Add only once a dimension (not one for each available label)
+					
 					if(!dimensionValues.contains(ldr)){
 						dimensionValues.add(ldr);
 					}else{
@@ -298,12 +315,11 @@ public class CubeSPARQL {
 								}
 							}
 						}
-					}						
+					}					
 				}
 			} catch (QueryEvaluationException e1) {
 				e1.printStackTrace();
 				System.out.println(dimensionURI);
-
 			}
 
 			Collections.sort(dimensionValues);
