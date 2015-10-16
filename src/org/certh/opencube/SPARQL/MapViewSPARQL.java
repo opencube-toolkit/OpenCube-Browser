@@ -12,18 +12,18 @@ public class MapViewSPARQL {
 			List<LDResource> visualDims, LDResource geodimension,
 			HashMap<LDResource, LDResource> fixedDims, List<LDResource> measures,
 			List<LDResource> cubeAttributes, String dataCubeURI,
-			String cubeGraph, String cubeDSDGraph,String lang, String SPARQLservice) {
+			String cubeGraph, String cubeDSDGraph,LDResource selectedGeoLevel,
+			String lang, String enlabel, String SPARQLservice ) {
 
 		String sparql_query = "PREFIX sdmx-measure: <http://purl.org/linked-data/sdmx/2009/measure#> ";
 		sparql_query += "PREFIX skos: <http://www.w3.org/2004/02/skos/core#>";
-		sparql_query += "PREFIX  qb: <http://purl.org/linked-data/cube#> Select distinct ?obs";
+		sparql_query += "PREFIX  qb: <http://purl.org/linked-data/cube#> Select distinct ?obs ";
 
 		int i = 1;
 		// Add variables ?dim to SPARQL query
 		// for (LDResource vDim : visualDims) {
 		for (LDResource fDim : fixedDims.keySet()) {
 			sparql_query += "?dim" + i + " ";
-
 			i++;
 		}
 
@@ -34,7 +34,7 @@ public class MapViewSPARQL {
 			i++;
 		}
 		// Select observations of a specific cube (cubeURI)
-		sparql_query += "?geolabel ?measure where{ ";
+		sparql_query += "?geolabel ?measure ?enlabel where{ ";
 		// If a SPARQL service is defined
 		if (SPARQLservice != null) {
 			sparql_query += "SERVICE " + SPARQLservice + " {";
@@ -112,8 +112,136 @@ public class MapViewSPARQL {
 		}
 
 		sparql_query += geoval+" skos:prefLabel ?geolabel. ";
-		//sparql_query += "?geovalue skos:prefLabel ?geolabel. ";
+		sparql_query += geoval+" skos:prefLabel ?enlabel. ";
+		if(selectedGeoLevel!=null){
+			sparql_query += "<"+selectedGeoLevel.getURI()+"> skos:member "+geoval+".";
+		}
 
+		sparql_query += "FILTER(LANGMATCHES(LANG(?enlabel), \"en\"))";
+		sparql_query += "FILTER(LANGMATCHES(LANG(?geolabel), \""+lang+"\"))";
+
+		// If a cube graph is defined
+		if (cubeDSDGraph != null) {
+			sparql_query += "}";
+		}
+		sparql_query += "}";
+
+		// If a SPARQL service is defined
+		if (SPARQLservice != null) {
+			sparql_query += "}";
+		}
+
+		TupleQueryResult res = QueryExecutor.executeSelect(sparql_query);
+		return res;
+	}	
+	
+	public static TupleQueryResult getDVisualsiationValuesMultipleMeasures(
+			List<LDResource> visualDims, LDResource geodimension,
+			HashMap<LDResource, LDResource> fixedDims, List<LDResource> measures,
+			List<LDResource> cubeAttributes, String dataCubeURI,
+			String cubeGraph, String cubeDSDGraph, LDResource selectedGeoLevel,
+			String lang, String enlabel, String SPARQLservice) {
+
+		String sparql_query = "PREFIX sdmx-measure: <http://purl.org/linked-data/sdmx/2009/measure#> ";
+		sparql_query += "PREFIX skos: <http://www.w3.org/2004/02/skos/core#>";
+		sparql_query += "PREFIX  qb: <http://purl.org/linked-data/cube#> Select distinct ?obs ";
+
+		int i = 1;	
+		
+		// add variables ?attr to SPARQL query
+		for (LDResource fAttr : cubeAttributes) { // Areti
+			sparql_query += "?attr" + i + " ";
+			i++;
+		}
+		
+		i = 1;
+		// add variables ?attr to SPARQL query
+		for (LDResource meas : measures) { // Areti
+			sparql_query += "?measure" + i + " ";
+			i++;
+		}		
+		
+		// Select observations of a specific cube (cubeURI)
+		sparql_query += "?geolabel ?enlabel where{ ";
+		// If a SPARQL service is defined
+		if (SPARQLservice != null) {
+			sparql_query += "SERVICE " + SPARQLservice + " {";
+		}
+		// If a cube graph is defined
+		if (cubeGraph != null) {
+			sparql_query += "GRAPH <" + cubeGraph + "> {";
+		}
+
+		sparql_query += "?obs <http://purl.org/linked-data/cube#dataSet> "	+ dataCubeURI + ".";
+		
+		// measure variables to SPARQL query
+		i=1;
+		for (LDResource meas : measures) { // Areti
+			sparql_query += "?obs <" + meas.getURI() + "> ?measure"+ i + ". ";
+			i++;
+		}
+	
+		i = 1;
+		sparql_query += "?obs <" + geodimension.getURI() + "> " + "?geodim. ";
+		
+		// Add fixed dimensions to where clause, select the first value of the
+		// list of all values
+		for (LDResource fDim : fixedDims.keySet()) {
+			sparql_query += "?obs <" + fDim.getURI() + ">";
+			if (fixedDims.get(fDim).getURI().toString().contains("http"))
+				sparql_query += "<" + fixedDims.get(fDim).getURI() + ">.";
+			else
+				sparql_query += "?obs2" + ". FILTER (STR(?obs2) = '"
+						+ fixedDims.get(fDim).getURI() + "')";
+		}
+
+		// If a cube graph is defined
+		if (cubeGraph != null) {
+			sparql_query += "}";
+		}
+
+		// Add attributes to where clause
+		i = 1;
+		for (LDResource fAttr : cubeAttributes) {
+			sparql_query += "OPTIONAL {";
+
+			// If a cube graph is defined
+			if (cubeGraph != null) {
+				sparql_query += "GRAPH <" + cubeGraph + "> {";
+			}
+
+			sparql_query += "?obs <" + fAttr.getURI() + "> " + "?attribute" + i	+ ". ";
+
+			// If a cube graph is defined
+			if (cubeGraph != null) {
+				sparql_query += "}";
+			}
+
+			// If a cube graph is defined
+			if (cubeDSDGraph != null) {
+				sparql_query += "GRAPH <" + cubeDSDGraph + "> {";
+			}
+			sparql_query += "?attribute" + i + " skos:prefLabel ?attr" + i
+					+ ". FILTER(LANGMATCHES(LANG(?attr" + i + "), \""+lang+"\"))}";
+
+			// If a cube graph is defined
+			if (cubeDSDGraph != null) {
+				sparql_query += "}";
+			}
+			i++;
+		}
+
+		// If a cube graph is defined
+		if (cubeDSDGraph != null) {
+			sparql_query += "GRAPH <" + cubeDSDGraph + "> {";
+		}
+
+		sparql_query += "?geodim skos:prefLabel ?geolabel. ";
+		sparql_query += "?geodim skos:prefLabel ?enlabel. ";
+		if(selectedGeoLevel!=null){
+			sparql_query += "<"+selectedGeoLevel.getURI()+"> skos:member ?geodim.";
+		}
+		sparql_query += "FILTER(LANGMATCHES(LANG(?enlabel), \"en\"))";
 		sparql_query += "FILTER(LANGMATCHES(LANG(?geolabel), \""+lang+"\"))";
 
 		// If a cube graph is defined
@@ -128,12 +256,8 @@ public class MapViewSPARQL {
 		if (SPARQLservice != null) {
 			sparql_query += "}";
 		}
-		// /////////////////////////////
-
 		TupleQueryResult res = QueryExecutor.executeSelect(sparql_query);
-		System.out.println("query is " + sparql_query);
 		return res;
-
 	}
 	
 	
@@ -141,7 +265,7 @@ public class MapViewSPARQL {
 			List<LDResource> visualDims, LDResource geodimension,
 			HashMap<LDResource, LDResource> fixedDims, List<LDResource> measures,
 			List<LDResource> cubeAttributes, String sliceURI, String sliceGraph,
-			String cubeGraph, String cubeDSDGraph, String lang,String SPARQLservice) {
+			String cubeGraph, String cubeDSDGraph, String lang, String enlabel, String SPARQLservice) {
 
 		String sparql_query = "PREFIX sdmx-measure: <http://purl.org/linked-data/sdmx/2009/measure#> ";
 		sparql_query += "PREFIX skos: <http://www.w3.org/2004/02/skos/core#>";
@@ -149,10 +273,8 @@ public class MapViewSPARQL {
 
 		int i = 1;
 		// Add variables ?dim to SPARQL query
-		// for (LDResource vDim : visualDims) {
 		for (LDResource fDim : fixedDims.keySet()) {
 			sparql_query += "?dim" + i + " ";
-
 			i++;
 		}
 
@@ -163,7 +285,7 @@ public class MapViewSPARQL {
 			i++;
 		}
 		// Select observations of a specific cube (cubeURI)
-		sparql_query += "?geolabel ?measure where{ ";
+		sparql_query += "?geolabel ?measure ?enlabel where{ ";
 		// If a SPARQL service is defined
 		if (SPARQLservice != null) {
 			sparql_query += "SERVICE " + SPARQLservice + " {";
@@ -216,8 +338,7 @@ public class MapViewSPARQL {
 				sparql_query += "GRAPH <" + cubeGraph + "> {";
 			}
 
-			sparql_query += "?obs <" + fAttr.getURI() + "> " + "?attribute" + i
-					+ ". ";
+			sparql_query += "?obs <" + fAttr.getURI() + "> " + "?attribute" + i	+ ". ";
 
 			// If a cube graph is defined
 			if (cubeGraph != null) {
@@ -243,8 +364,7 @@ public class MapViewSPARQL {
 			sparql_query += "GRAPH <" + cubeGraph + "> {";
 		}
 
-		sparql_query += "?obs <"
-				+ geodimension.getURI() + "> ?geovalue.";
+		sparql_query += "?obs <"+ geodimension.getURI() + "> ?geovalue.";
 
 		sparql_query += "?obs <" + measures.get(0).getURI() + "> ?measure. ";
 
@@ -257,7 +377,8 @@ public class MapViewSPARQL {
 			sparql_query += "GRAPH <" + cubeDSDGraph + "> {";
 		}
 		sparql_query += "?geovalue skos:prefLabel ?geolabel. ";
-
+		sparql_query += "?geovalue skos:prefLabel ?enlabel. ";
+		sparql_query += "FILTER(LANGMATCHES(LANG(?enlabel), \"en\"))";
 		sparql_query += "FILTER(LANGMATCHES(LANG(?geolabel), \""+lang+"\"))";
 
 		// If a cube graph is defined
@@ -272,13 +393,7 @@ public class MapViewSPARQL {
 		if (SPARQLservice != null) {
 			sparql_query += "}";
 		}
-		// /////////////////////////////
-
 		TupleQueryResult res = QueryExecutor.executeSelect(sparql_query);
-		System.out.println("query is " + sparql_query);
 		return res;
-
 	}
-	
-
 }

@@ -237,8 +237,8 @@ public class DataCubeBrowserPlus extends
 			selectedLanguage = defaultLang;
 		}
 
-		allCubes = SelectionSPARQL
-				.getAllAvailableCubesAndSlices(SPARQL_service);
+		allCubes = SelectionSPARQL.getMaximalCubesAndSlices(selectedLanguage,
+				selectedLanguage,ignoreLang,SPARQL_service);
 		// Prepare and show the widget
 		populateCentralContainer();
 

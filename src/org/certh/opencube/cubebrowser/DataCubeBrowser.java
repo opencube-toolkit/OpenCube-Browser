@@ -220,13 +220,15 @@ public class DataCubeBrowser extends AbstractWidget<DataCubeBrowser.Config> {
 			defaultLang = config.defaultLang;
 
 			if (defaultLang == null || defaultLang.equals("")) {
-				defaultLang = com.fluidops.iwb.util.Config.getConfig()
-						.getPreferredLanguage();
+				defaultLang = com.fluidops.iwb.util.Config.getConfig().getPreferredLanguage();
 			}
 			selectedLanguage = defaultLang;
 		}
 
 		allCubes = SelectionSPARQL.getAllAvailableCubesAndSlices(SPARQL_service);
+		//		getMaximalCubesAndSlices(selectedLanguage,
+		//		selectedLanguage,ignoreLang,SPARQL_service);
+
 		// Prepare and show the widget
 		populateCentralContainer();
 
@@ -249,12 +251,10 @@ public class DataCubeBrowser extends AbstractWidget<DataCubeBrowser.Config> {
 
 			if (cubeSliceTypes != null) {
 				// The URI corresponds to a data cube
-				isCube = cubeSliceTypes
-						.contains("http://purl.org/linked-data/cube#DataSet");
+				isCube = cubeSliceTypes.contains("http://purl.org/linked-data/cube#DataSet");
 
 				// The URI corresponds to a cube Slice
-				isSlice = cubeSliceTypes
-						.contains("http://purl.org/linked-data/cube#Slice");
+				isSlice = cubeSliceTypes.contains("http://purl.org/linked-data/cube#Slice");
 			} else {
 				isCube = false;
 				isSlice = false;
@@ -378,14 +378,12 @@ public class DataCubeBrowser extends AbstractWidget<DataCubeBrowser.Config> {
 
 					if (!ignoreLang) {
 						// Get the available languages of labels
-						availableLanguages = CubeSPARQL
-								.getAvailableCubeLanguages(cubeDSDGraph,
-										SPARQL_service);
+						availableLanguages = CubeSPARQL.getAvailableCubeLanguages(
+								cubeDSDGraph,SPARQL_service);
 
 						// get the selected language to use
-						selectedLanguage = CubeHandlingUtils
-								.getSelectedLanguage(availableLanguages,
-										selectedLanguage);
+						selectedLanguage = CubeHandlingUtils.getSelectedLanguage(
+								availableLanguages,	selectedLanguage);
 					}
 				
 					Thread sliceFixedDimensionsThread = new Thread(
@@ -423,9 +421,8 @@ public class DataCubeBrowser extends AbstractWidget<DataCubeBrowser.Config> {
 									SPARQL_service);
 
 							// Get the selected measure to use
-							selectedMeasures = CubeHandlingUtils
-									.getSelectedMeasure(cubeMeasures,
-											selectedMeasures);
+							selectedMeasures = CubeHandlingUtils.getSelectedMeasure(
+									cubeMeasures,selectedMeasures);
 						}
 					});
 					
@@ -486,7 +483,6 @@ public class DataCubeBrowser extends AbstractWidget<DataCubeBrowser.Config> {
 						e.printStackTrace();
 					}
 				}
-
 				
 					// top container styling
 					selectCubeContainer.addStyle("border-style", "solid");
@@ -543,10 +539,8 @@ public class DataCubeBrowser extends AbstractWidget<DataCubeBrowser.Config> {
 
 					// populate cubes combo box
 					for (LDResource cube : allCubes) {
-						if (cube.getLabel() != null) {
-							cubesCombo.addChoice(cube.getLabel(), cube);
-						} else {
-							cubesCombo.addChoice(cube.getURI(), cube);
+						if (cube.getURIorLabel() != null) {
+							cubesCombo.addChoice(cube.getURIorLabel(), cube);
 						}
 					}
 
@@ -599,21 +593,17 @@ public class DataCubeBrowser extends AbstractWidget<DataCubeBrowser.Config> {
 						// Show Aggregation set dimensions
 						for (LDResource aggdim : aggregationSetDims) {
 
-							// show one check box for each aggregation set
-							// dimension
+							// show one check box for each aggregation set dimension
 							FCheckBox aggrDimCheckBox = new FCheckBox(
 									"aggregation_" + aggregationDim,
 									aggdim.getURIorLabel()) {
 
 								public void onClick() {
 
-									// Get all selected aggregation set
-									// dimensions for browsing
+									// Get all selected aggregation set dimensions for browsing
 									List<LDResource> aggregationSetSelectedDims = new ArrayList<LDResource>();
-									for (LDResource aggSetDimURI : mapDimURIcheckBox
-											.keySet()) {
-										FCheckBox check = mapDimURIcheckBox
-												.get(aggSetDimURI);
+									for (LDResource aggSetDimURI : mapDimURIcheckBox.keySet()) {
+										FCheckBox check = mapDimURIcheckBox.get(aggSetDimURI);
 
 										// Get selected dimensions
 										if (check.checked) {
@@ -622,28 +612,18 @@ public class DataCubeBrowser extends AbstractWidget<DataCubeBrowser.Config> {
 										}
 									}
 
-									// Identify the cube of the aggregation set
-									// that
-									// contains exactly the dimension selected
-									// to be
-									// browsed
-									for (LDResource cube : cubeDimsOfAggregationSet
-											.keySet()) {
-										List<LDResource> cubeDims = cubeDimsOfAggregationSet
-												.get(cube);
-										if ((cubeDims.size() == aggregationSetSelectedDims
-												.size())
-												&& cubeDims
-														.containsAll(aggregationSetSelectedDims)) {
-											System.out.println("NEW CUBE URI: "
-													+ cube.getURI());
+									// Identify the cube of the aggregation set that
+									// contains exactly the dimension selected to be browsed
+									for (LDResource cube : cubeDimsOfAggregationSet.keySet()) {
+										List<LDResource> cubeDims = cubeDimsOfAggregationSet.get(cube);
+										if ((cubeDims.size() == aggregationSetSelectedDims.size())
+												&& cubeDims.containsAll(aggregationSetSelectedDims)) {
+											System.out.println("NEW CUBE URI: "	+ cube.getURI());
 
 											// The new cube to visualize
-											cubeSliceURI = "<" + cube.getURI()
-													+ ">";
+											cubeSliceURI = "<" + cube.getURI()+ ">";
 
-											// clear the previous visualization
-											// and
+											// clear the previous visualization and
 											// create a new one for the new cube
 											cnt.removeAll();
 											topcontainer.removeAll();
@@ -663,10 +643,8 @@ public class DataCubeBrowser extends AbstractWidget<DataCubeBrowser.Config> {
 							};
 
 							// set as checked if the dimension is contained at
-							// the
-							// selected cube
-							aggrDimCheckBox.setChecked(cubeDimensions
-									.contains(aggdim));
+							// the selected cube
+							aggrDimCheckBox.setChecked(cubeDimensions.contains(aggdim));
 							mapDimURIcheckBox.put(aggdim, aggrDimCheckBox);
 							topcontainer.add(aggrDimCheckBox);
 
@@ -699,8 +677,7 @@ public class DataCubeBrowser extends AbstractWidget<DataCubeBrowser.Config> {
 				measurescontainer.addStyle("text-align", "left");
 
 				FLabel measure_label = new FLabel("measure_lb",
-						"<b>Measures</b></br>"
-								+ "Select the measures to visualize:");
+						"<b>Measures</b></br>"+ "Select the measures to visualize:");
 				measurescontainer.add(measure_label);
 
 				int colorIndex = 0;
@@ -716,14 +693,10 @@ public class DataCubeBrowser extends AbstractWidget<DataCubeBrowser.Config> {
 
 						public void onClick() {
 
-							// Get all selected aggregation set dimensions for
-							// browsing
+							// Get all selected aggregation set dimensions for browsing
 							selectedMeasures = new ArrayList<LDResource>();
-							for (LDResource measureURI : mapMeasureURIcheckBox
-									.keySet()) {
-								FCheckBox check = mapMeasureURIcheckBox
-										.get(measureURI);
-
+							for (LDResource measureURI : mapMeasureURIcheckBox.keySet()) {
+								FCheckBox check = mapMeasureURIcheckBox.get(measureURI);
 								// Get selected dimensions
 								if (check.checked) {
 									selectedMeasures.add(measureURI);
@@ -745,10 +718,8 @@ public class DataCubeBrowser extends AbstractWidget<DataCubeBrowser.Config> {
 
 					colorIndex++;
 
-					// set as checked if the dimension is contained at the
-					// selected cube
-					measureCheckBox.setChecked(selectedMeasures
-							.contains(measure));
+					// set as checked if the dimension is contained at the selected cube
+					measureCheckBox.setChecked(selectedMeasures.contains(measure));
 					mapMeasureURIcheckBox.put(measure, measureCheckBox);
 					measurescontainer.add(measureCheckBox);
 					measureCount++;
@@ -770,8 +741,7 @@ public class DataCubeBrowser extends AbstractWidget<DataCubeBrowser.Config> {
 					languagecontainer.addStyle("height", containerHeight+"px ");
 
 					FLabel datalang_label = new FLabel(
-							"datalang",
-							"<b>Language</b></br>"
+							"datalang",	"<b>Language</b></br>"
 									+ "Select the language of the visualized data:");
 					languagecontainer.add(datalang_label);
 
@@ -779,8 +749,7 @@ public class DataCubeBrowser extends AbstractWidget<DataCubeBrowser.Config> {
 					FComboBox datalang_combo = new FComboBox("datalang_combo") {
 						@Override
 						public void onChange() {
-							selectedLanguage = this.getSelected().get(0)
-									.toString();
+							selectedLanguage = this.getSelected().get(0).toString();
 							cnt.removeAll();
 							topcontainer.removeAll();
 							leftcontainer.removeAll();
@@ -812,10 +781,9 @@ public class DataCubeBrowser extends AbstractWidget<DataCubeBrowser.Config> {
 					topfarray.add(topcontainer);
 				}
 
-				// Show measures panel if there are more than 1 cube measures
-			//	if (cubeMeasures.size() > 1) {
-					topfarray.add(measurescontainer);
-			//	}
+				// Show measures panel 
+				topfarray.add(measurescontainer);
+			
 
 				// add language container if there are more than 1 language
 				if (!ignoreLang && availableLanguages.size() > 1) {
@@ -830,9 +798,8 @@ public class DataCubeBrowser extends AbstractWidget<DataCubeBrowser.Config> {
 				if (visualDimensions.size() == 0) {
 					// Select the two dimension with the most values for
 					// visualization
-					visualDimensions = CubeHandlingUtils
-							.getRandomDims4Visualisation(cubeDimensions,
-									allDimensionsValues);
+					visualDimensions = CubeHandlingUtils.getRandomDims4Visualisation(
+							cubeDimensions,	allDimensionsValues);
 				} else if (cubeDimensions.size() > 1) {
 
 					// The visual dimensions has been removed
@@ -852,8 +819,7 @@ public class DataCubeBrowser extends AbstractWidget<DataCubeBrowser.Config> {
 						// If the previous dimension does not exist any more
 						// (has been removed by the user)
 						if (!cubeDimensions.contains(visualDimensions.get(1))) {
-							if (visualDimensions.get(0).equals(
-									cubeDimensions.get(0))) {
+							if (visualDimensions.get(0).equals(cubeDimensions.get(0))) {
 								visualDimensions.remove(1);
 								visualDimensions.add(1, cubeDimensions.get(1));
 							} else {
@@ -864,8 +830,7 @@ public class DataCubeBrowser extends AbstractWidget<DataCubeBrowser.Config> {
 
 						// One visual dimension
 					} else {
-						if (visualDimensions.get(0).equals(
-								cubeDimensions.get(0))) {
+						if (visualDimensions.get(0).equals(cubeDimensions.get(0))) {
 							visualDimensions.add(1, cubeDimensions.get(1));
 						} else {
 							visualDimensions.add(1, cubeDimensions.get(0));
@@ -909,7 +874,7 @@ public class DataCubeBrowser extends AbstractWidget<DataCubeBrowser.Config> {
 
 				// Initialize FTable
 				ftable.setShowCSVExport(true);
-				ftable.setNumberOfRows(20);
+				ftable.setNumberOfRows(10);
 				ftable.setEnableFilter(true);
 				ftable.setOverFlowContainer(true);
 				ftable.setFilterPos(FilterPos.TOP);
@@ -946,8 +911,7 @@ public class DataCubeBrowser extends AbstractWidget<DataCubeBrowser.Config> {
 					ArrayList<FComponent> dim1Array = new ArrayList<FComponent>();
 
 					// Add label for Dim1 (column headings)
-					FLabel dim1Label = new FLabel("dim1Label",
-							"<u>Column Headings:<u>");
+					FLabel dim1Label = new FLabel("dim1Label","<u>Column Headings:<u>");
 					dim1Array.add(dim1Label);
 
 					// Add Combo box for Dim1
@@ -956,33 +920,24 @@ public class DataCubeBrowser extends AbstractWidget<DataCubeBrowser.Config> {
 						public void onChange() {
 
 							// Get the URI of the 1st selected dimension
-							List<String> d1Selected = this
-									.getSelectedAsString();
+							List<String> d1Selected = this.getSelectedAsString();
 
 							// Get the URI of the 2nd selected dimension
 							List<String> d2Selected = null;
-							for (FComponent fc : leftcontainer
-									.getAllComponents()) {
+							for (FComponent fc : leftcontainer.getAllComponents()) {
 								if (fc.getId().contains("_dim2Combo")) {
-									d2Selected = ((FComboBox) fc)
-											.getSelectedAsString();
+									d2Selected = ((FComboBox) fc).getSelectedAsString();
 
-									// If both combo boxes have the same
-									// selected value
+									// If both combo boxes have the same selected value
 									// Select randomly another value for d2
-									if (d1Selected.get(0).equals(
-											d2Selected.get(0))) {
-										List<Pair<String, Object>> d2choices = ((FComboBox) fc)
-												.getChoices();
+									if (d1Selected.get(0).equals(d2Selected.get(0))) {
+										List<Pair<String, Object>> d2choices =
+												((FComboBox) fc).getChoices();
 										for (Pair<String, Object> pair : d2choices) {
-											if (!pair.snd.toString().equals(
-													d2Selected.get(0))) {
+											if (!pair.snd.toString().equals(d2Selected.get(0))) {
 												d2Selected.clear();
-												d2Selected.add(pair.snd
-														.toString());
-												((FComboBox) fc)
-														.setPreSelected(pair.snd
-																.toString());
+												d2Selected.add(pair.snd.toString());
+												((FComboBox) fc).setPreSelected(pair.snd.toString());
 												((FComboBox) fc).populateView();
 												break;
 											}
@@ -1017,33 +972,23 @@ public class DataCubeBrowser extends AbstractWidget<DataCubeBrowser.Config> {
 						public void onChange() {
 
 							// Get the URI of the 2nd selected dimension
-							List<String> d2Selected = this
-									.getSelectedAsString();
+							List<String> d2Selected = this.getSelectedAsString();
 
 							// Get the URI of the 1st selected dimension
 							List<String> d1Selected = null;
-							for (FComponent fc : leftcontainer
-									.getAllComponents()) {
+							for (FComponent fc : leftcontainer.getAllComponents()) {
 								if (fc.getId().contains("_dim1Combo")) {
-									d1Selected = ((FComboBox) fc)
-											.getSelectedAsString();
+									d1Selected = ((FComboBox) fc).getSelectedAsString();
 
 									// Both combo boxes have the same selected
-									// value
-									// Select randomly another value for d2
-									if (d1Selected.get(0).equals(
-											d2Selected.get(0))) {
-										List<Pair<String, Object>> d1choices = ((FComboBox) fc)
-												.getChoices();
+									// value Select randomly another value for d2
+									if (d1Selected.get(0).equals(d2Selected.get(0))) {
+										List<Pair<String, Object>> d1choices = ((FComboBox) fc).getChoices();
 										for (Pair<String, Object> pair : d1choices) {
-											if (!pair.snd.toString().equals(
-													d1Selected.get(0))) {
+											if (!pair.snd.toString().equals(d1Selected.get(0))) {
 												d1Selected.clear();
-												d1Selected.add(pair.snd
-														.toString());
-												((FComboBox) fc)
-														.setPreSelected(pair.snd
-																.toString());
+												d1Selected.add(pair.snd.toString());
+												((FComboBox) fc).setPreSelected(pair.snd.toString());
 												((FComboBox) fc).populateView();
 												break;
 											}
@@ -1099,8 +1044,7 @@ public class DataCubeBrowser extends AbstractWidget<DataCubeBrowser.Config> {
 					// An FGrid to show visual and fixed cube dimensions
 
 					int sliceFixedValues = 1;
-					for (LDResource sliceFixedDim : sliceFixedDimensionsValues
-							.keySet()) {
+					for (LDResource sliceFixedDim : sliceFixedDimensionsValues.keySet()) {
 						ArrayList<FComponent> farray = new ArrayList<FComponent>();
 
 						// Add the label for the fixed cube dimension
@@ -1108,8 +1052,7 @@ public class DataCubeBrowser extends AbstractWidget<DataCubeBrowser.Config> {
 								+ sliceFixedValues, "<u>"
 								+ sliceFixedDim.getURIorLabel() + ": </u>");
 						farray.add(fDimLabel);
-						LDResource fDimValue = sliceFixedDimensionsValues
-								.get(sliceFixedDim);
+						LDResource fDimValue = sliceFixedDimensionsValues.get(sliceFixedDim);
 
 						FLabel fDimValueLabel = null;
 						if (fDimValue.getURIorLabel().length() > 60) {
@@ -1169,8 +1112,7 @@ public class DataCubeBrowser extends AbstractWidget<DataCubeBrowser.Config> {
 				// Show the create slice button if there are fixed dimensions
 				// i.e. a slice is not already visualized
 				if (fixedDimensions.size() > 0 && isCube) {
-					FContainer bottomcontainer = new FContainer(
-							"bottomcontainer");
+					FContainer bottomcontainer = new FContainer("bottomcontainer");
 
 					// Bottom container styling
 					bottomcontainer.addStyle("border-style", "solid");
@@ -1205,8 +1147,7 @@ public class DataCubeBrowser extends AbstractWidget<DataCubeBrowser.Config> {
 							String message = "A new slice with the following URI has been created: "
 									+ sliceURI;
 
-							FDialog.showMessage(this.getPage(),
-									"New Slice created", message, "ok");
+							FDialog.showMessage(this.getPage(),"New Slice created", message, "ok");
 						}
 					};
 
@@ -1312,8 +1253,7 @@ public class DataCubeBrowser extends AbstractWidget<DataCubeBrowser.Config> {
 	}
 
 	// Set visual and fixed dimensions based on user selection of combo boxes
-	private void setVisualDimensions(List<String> d1Selected,
-			List<String> d2Selected) {
+	private void setVisualDimensions(List<String> d1Selected,List<String> d2Selected) {
 		// A tmp list to store the new dimensions for visualization
 		List<LDResource> tmpvisualDimensions = new ArrayList<LDResource>();
 		tmpvisualDimensions.add(null);
@@ -1402,8 +1342,7 @@ public class DataCubeBrowser extends AbstractWidget<DataCubeBrowser.Config> {
 
 	// Add labels and combo boxed for the fixed cube dimensions
 	// Input: refresh, true: when refresh is needed i.e. not at the
-	// initialization,
-	// false when refresh is not need i.e. at the initialization
+	// initialization, false when refresh is not need i.e. at the initialization
 	private void addFixedDimensions() {
 
 		dimensionURIfcomponents.clear();
@@ -1444,8 +1383,7 @@ public class DataCubeBrowser extends AbstractWidget<DataCubeBrowser.Config> {
 
 			if (fixedDimensionsSelectedValues.get(fDim) != null) {
 				// Combo box pre-selected value
-				fDimCombo.setPreSelected(fixedDimensionsSelectedValues
-						.get(fDim).getURI());
+				fDimCombo.setPreSelected(fixedDimensionsSelectedValues.get(fDim).getURI());
 			}
 
 			dimComponents.add(fDimCombo);
@@ -1465,20 +1403,16 @@ public class DataCubeBrowser extends AbstractWidget<DataCubeBrowser.Config> {
 
 		// Get the selected value for each fixed dimension
 		for (LDResource dimres : dimensionURIfcomponents.keySet()) {
-			List<FComponent> dimComponents = dimensionURIfcomponents
-					.get(dimres);
+			List<FComponent> dimComponents = dimensionURIfcomponents.get(dimres);
 			String selectedValue = ((FComboBox) dimComponents.get(1))
 					.getSelectedAsString().get(0);
-			List<LDResource> selectedDimValues = allDimensionsValues
-					.get(dimres);
+			List<LDResource> selectedDimValues = allDimensionsValues.get(dimres);
 			for (LDResource dimValue : selectedDimValues) {
 				if (dimValue.getURI().equals(selectedValue)) {
 					fixedDimensionsSelectedValues.put(dimres, dimValue);
 				}
 			}
 		}
-
-		// fixedDimensionsSelectedValues.putAll(tmpFixedDimensionsSelectedValues);
 
 		TupleQueryResult res = null;
 		if (isCube) {
@@ -1517,7 +1451,6 @@ public class DataCubeBrowser extends AbstractWidget<DataCubeBrowser.Config> {
 		// If there are 2 visual dimensions
 		// Get all values for 2nd visual dimension
 		if (visualDimensions.size() == 2) {
-
 			dim2 = dimensions4VisualisationValues.get(visualDimensions.get(1));
 		}
 
@@ -1528,7 +1461,7 @@ public class DataCubeBrowser extends AbstractWidget<DataCubeBrowser.Config> {
 		if (visualDimensions.size() == 2) {
 			v2DCube = new LDResource[dim2.size()][dim1.size()];
 
-			// One visual dimension
+		// One visual dimension
 		} else {
 			v2DCube = new LDResource[dim1.size()][1];
 		}
@@ -1552,15 +1485,12 @@ public class DataCubeBrowser extends AbstractWidget<DataCubeBrowser.Config> {
 					tm.addColumn(visualDimensions.get(1).getURIorLabel());
 				}
 
-				
-
-				// The rest columns of the first row - the values of the 1st
-				// dimension
+				// The rest columns of the first row - the values of the 1st dimension
 				for (LDResource dim1Val : dim1) {
 					tm.addColumn(dim1Val.getURIorLabel());
 				}
 
-				// If there is 1 visual dimensions
+			// If there is 1 visual dimensions
 			} else {
 				tm.addColumn(visualDimensions.get(0).getURIorLabel());
 				tm.addColumn("Measure");
@@ -1587,11 +1517,7 @@ public class DataCubeBrowser extends AbstractWidget<DataCubeBrowser.Config> {
 								+ " </p></font> ";
 					}
 					i++;
-				}
-				
-				
-				
-				
+				}				
 
 				// get observation URI
 				String obsURI = bindingSet.getValue("obs").stringValue();
@@ -1633,7 +1559,7 @@ public class DataCubeBrowser extends AbstractWidget<DataCubeBrowser.Config> {
 					tm.addRow(data);
 				}
 
-				// If there is 1 visual dimensions
+			// If there is 1 visual dimensions
 			} else {
 
 				// Add observations

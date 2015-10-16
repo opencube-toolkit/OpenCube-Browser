@@ -12,6 +12,8 @@ import org.openrdf.query.BindingSet;
 import org.openrdf.query.QueryEvaluationException;
 import org.openrdf.query.TupleQueryResult;
 
+import com.fluidops.ajax.components.FComboBox;
+
 import scala.collection.mutable.HashSet;
 import scala.collection.mutable.LinkedHashSet;
 
@@ -21,9 +23,10 @@ public class AggregationSPARQL {
 		
 		String getCubesWithNoAggregationSet_query=
 				"PREFIX  qb: <http://purl.org/linked-data/cube#>" +
+				"PREFIX opencube: <http://opencube-project.eu/>"+
 				"select ?dataset where {" +
 				"GRAPH ?cubeGraph{?dataset rdf:type qb:DataSet.} " +
-				"MINUS{  GRAPH ?aggGraph{ ?dataset qb:aggregationSet ?set}}}";
+				"MINUS{  GRAPH ?aggGraph{ ?dataset qb:aggregationSet|opencube:aggregationSet ?set}}}";
 		
 		TupleQueryResult res = QueryExecutor.executeSelect(getCubesWithNoAggregationSet_query);
 		
@@ -39,8 +42,7 @@ public class AggregationSPARQL {
 			e.printStackTrace();
 		}
 	
-		return cubesWithNoAggregationSet;
-			 
+		return cubesWithNoAggregationSet;			 
 	}
 
 	public static String createNewAggregationSet(String aggregationGraph,
@@ -50,12 +52,13 @@ public class AggregationSPARQL {
 		Random rand = new Random();
 		long rnd = Math.abs(rand.nextLong());
 
-		String aggregationSetURI = "<http://www.fluidops.com/resource/aggregationSet_"
+		String aggregationSetURI = "<http://opencube-project.eu/aggregationSet_"
 				+ rnd + ">";
 
 		// INSERT NEW AGGREGATION SET
 		String insert_aggregationSet_query = "PREFIX qb: <http://purl.org/linked-data/cube#>"
 				+ "PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>"
+				+ "PREFIX opencube: <http://opencube-project.eu/>"
 				+ "INSERT DATA  {";
 
 		if (SPARQLservice != null) {
@@ -67,7 +70,7 @@ public class AggregationSPARQL {
 		}
 
 		insert_aggregationSet_query += aggregationSetURI
-				+ " rdf:type qb:AggregationSet.} ";
+				+ " rdf:type opencube:aggregationSet.} ";
 
 		if (aggregationGraph != null) {
 			insert_aggregationSet_query += "}";
@@ -89,6 +92,7 @@ public class AggregationSPARQL {
 		// Attach cube 2 aggregation set
 		String attach_cube2aggregationSet_query = "PREFIX qb: <http://purl.org/linked-data/cube#>"
 				+ "PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>"
+				+ "PREFIX opencube: <http://opencube-project.eu/>"
 				+ "INSERT DATA  {";
 
 		// If sparql service defined
@@ -96,14 +100,14 @@ public class AggregationSPARQL {
 			attach_cube2aggregationSet_query += "SERVICE " + SPARQLservice
 					+ " {";
 		}
-
+		
 		// if aggregation set graph defined
 		if (aggregationSetGraph != null) {
 			attach_cube2aggregationSet_query += "GRAPH <" + aggregationSetGraph
 					+ "> {";
-		}
-
-		attach_cube2aggregationSet_query += datacubeURI + " qb:aggregationSet "
+		}	
+		
+		attach_cube2aggregationSet_query += datacubeURI + " opencube:aggregationSet "
 				+ aggregationSetURI + " .} ";
 
 		if (aggregationSetGraph != null) {
@@ -124,6 +128,7 @@ public class AggregationSPARQL {
 		String getAggegationSetDimsFromCube_query = "PREFIX  qb: <http://purl.org/linked-data/cube#>"
 				+ "PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>"
 				+ "PREFIX skos: <http://www.w3.org/2004/02/skos/core#>"
+				+ "PREFIX opencube: <http://opencube-project.eu/>"
 				+ "select  distinct ?dim ?label1 ?label2 where {";
 
 		// If a SPARQL service is defined
@@ -135,13 +140,13 @@ public class AggregationSPARQL {
 		if (cubeDSDGraph != null) {
 			getAggegationSetDimsFromCube_query += "GRAPH <" + cubeDSDGraph	+ "> {";
 		}
-
-		getAggegationSetDimsFromCube_query += cubeURI+ " qb:aggregationSet ?set."
-				+ "?dataset qb:aggregationSet ?set."
+		
+		getAggegationSetDimsFromCube_query += cubeURI+ " qb:aggregationSet|opencube:aggregationSet ?set."
+				+ "?dataset qb:aggregationSet|opencube:aggregationSet ?set."
 				+ "?dsd qb:component ?comp."
 				+ "?comp qb:dimension ?dim."
 				+"OPTIONAL{?dim qb:concept ?cons.?cons skos:prefLabel|rdfs:label ?label1.}"	
-				+"OPTIONAL{?dim rdfs:comment ?label2.}";
+				+"OPTIONAL{?dim rdfs:comment|rdfs:label ?label2.}";
 
 		// If a cube DSD graph is defined
 		if (cubeDSDGraph != null) {
@@ -160,9 +165,7 @@ public class AggregationSPARQL {
 		List<LDResource> aggegationSetDimensions = new ArrayList<LDResource>();
 
 		try {
-
-			while (res.hasNext()) {
-				
+			while (res.hasNext()) {				
 				BindingSet bindingSet = res.next();
 				LDResource ldr = new LDResource(bindingSet.getValue("dim").stringValue());
 
@@ -188,7 +191,8 @@ public class AggregationSPARQL {
 							aggegationSetDimensions.add(ldr);
 						}
 					}else{
-						for(LDResource exisitingLdr:aggegationSetDimensions){
+						List<LDResource> tmpAggSetDims=new ArrayList<LDResource>(aggegationSetDimensions);
+						for(LDResource exisitingLdr:tmpAggSetDims){
 							//Find the existing dimension that has the same URI (different language)
 							if(exisitingLdr.equals(ldr)){
 								//The new ldr has the preferred language
@@ -215,12 +219,13 @@ public class AggregationSPARQL {
 
 	}
 	
-	public static HashMap<LDResource, List<LDResource>> getCubeAndDimensionsOfAggregateSet(String cubeURI,
+	public static HashMap<LDResource, List<LDResource>> getCubeAndDimensionsOfAggregateSet2(String cubeURI,
 			String cubeDSDGraph, String lang,String defaultlang, boolean ignorelang,String SPARQLservice) {
 
 		String getAggegationSetDimsFromCube_query = "PREFIX  qb: <http://purl.org/linked-data/cube#>"
 				+ "PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>"
 				+ "PREFIX skos: <http://www.w3.org/2004/02/skos/core#>"
+				+ "PREFIX opencube: <http://opencube-project.eu/>"
 				+ "select  distinct ?dataset ?dim ?label1 ?label2 where {";
 
 		// If a SPARQL service is defined
@@ -232,10 +237,10 @@ public class AggregationSPARQL {
 		if (cubeDSDGraph != null) {
 			getAggegationSetDimsFromCube_query += "GRAPH <" + cubeDSDGraph+ "> {";
 		}
-
+		
 		getAggegationSetDimsFromCube_query += cubeURI
-				+ " qb:aggregationSet ?set."
-				+ "?dataset qb:aggregationSet ?set."
+				+ " qb:aggregationSet|opencube:aggregationSet ?set."
+				+ "?dataset qb:aggregationSet|opencube:aggregationSet ?set."
 				+ "?dsd qb:component ?comp."
 				+ "?comp qb:dimension ?dim."
 				+"OPTIONAL{?dim qb:concept ?cons.?cons skos:prefLabel|rdfs:label ?label1.}"
@@ -323,25 +328,99 @@ public class AggregationSPARQL {
 			
 	}
 
+	public static HashMap<LDResource, List<LDResource>> getCubeAndDimensionsOfAggregateSet(String cubeURI,
+			String cubeDSDGraph, String lang,String defaultlang, boolean ignorelang,String SPARQLservice) {
+
+		String getAggegationSetDimsFromCube_query = "PREFIX  qb: <http://purl.org/linked-data/cube#>"
+				+ "PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>"
+				+ "PREFIX skos: <http://www.w3.org/2004/02/skos/core#>"
+				+ "PREFIX opencube: <http://opencube-project.eu/>"		
+				+ "select  distinct ?dataset where {";
+
+		// If a SPARQL service is defined
+		if (SPARQLservice != null) {
+			getAggegationSetDimsFromCube_query += "SERVICE " + SPARQLservice+ " {";
+		}
+
+		// If a cube graph is defined
+		if (cubeDSDGraph != null) {
+			getAggegationSetDimsFromCube_query += "GRAPH <" + cubeDSDGraph+ "> {";
+		}
+				
+		getAggegationSetDimsFromCube_query += cubeURI
+				+ " qb:aggregationSet|opencube:aggregationSet ?set."
+				+ "?dataset qb:aggregationSet|opencube:aggregationSet ?set.}";			
+			
+		// If a cube DSD graph is defined
+		if (cubeDSDGraph != null) {
+			getAggegationSetDimsFromCube_query += "}";
+		}
+
+		// If a SPARQL service is defined
+		if (SPARQLservice != null) {
+			getAggegationSetDimsFromCube_query += "}";
+		}
+		
+		TupleQueryResult res = QueryExecutor.executeSelect(getAggegationSetDimsFromCube_query);
+		List<LDResource> cubesOfAggSet= new ArrayList<LDResource>();
+		HashMap<LDResource, List<LDResource>> aggregationSetCubeDimensions = new 
+				HashMap<LDResource, List<LDResource>>();
+		
+		try {
+			while (res.hasNext()) {
+				
+				BindingSet bindingSet = res.next();
+				LDResource cube = new LDResource(bindingSet.getValue("dataset").stringValue());
+				cubesOfAggSet.add(cube);			
+			}
+			
+			for(LDResource q:cubesOfAggSet){
+				String q_uri="<"+q.getURI()+">";
+				String thisCubeGraph=CubeSPARQL.getCubeSliceGraph(q_uri, SPARQLservice);				
+				List<LDResource> thisCubeDims=CubeSPARQL.getDataCubeDimensions(q_uri,
+						thisCubeGraph,cubeDSDGraph,lang, defaultlang,ignorelang,SPARQLservice);
+				aggregationSetCubeDimensions.put(q, thisCubeDims);
+				
+				
+			}
+		} catch (QueryEvaluationException e) {
+			e.printStackTrace();
+		}
+
+		return aggregationSetCubeDimensions;
+	}		
+	
 	// TO DO: DO SOMETHONG WITH THE RANDOM. CHECK IF EXIST? OR FOR OBSERVATIONS
 	// START FROM 1...N
 	public static String createCubeForAggregationSet(
 			Set<LDResource> dimensions, List<LDResource> measures,
 			String originalCubeURI, String originalCubeGraph, String DSDgraph,
 			String aggregationSetURI, HashMap<LDResource, List<LDResource>> dimensionsLevelsFromSchema,
-			String SPARQLservice) {
+			String SPARQLservice, HashMap<LDResource, FComboBox> mapMeasureOperation) {
 
 		// create random DSD, Cube URI and Cube Graph URI
 		Random rand = new Random();
 		long rnd = Math.abs(rand.nextLong());
 
-		String newDSD_URI = "<http://www.fluidops.com/resource/dsd_" + rnd+ ">";
-		String newCube_URI = "<http://www.fluidops.com/resource/cube_" + rnd+ ">";
-		String newCubeGraph_URI = "<http://www.fluidops.com/resource/graph_"+ rnd + ">";
+		String newDSD_URI = "<http://opencube-project.eu/dsd_" + rnd+ ">";
+		String newCubeGraph_URI = "<http://opencube-project.eu/graph_"+ rnd + ">";
+		String newCube_URI = originalCubeURI.replaceAll(">","");
+		for(LDResource dim:dimensions){
+			 if (dim.getURI().contains("#")) {
+				 newCube_URI+="_"+dim.getURI().substring(dim.getURI().lastIndexOf("#") + 1, dim.getURI().length());
+			} else {
+				newCube_URI+="_"+ dim.getURI().substring(dim.getURI().lastIndexOf("/") + 1, dim.getURI().length());
+			}
+		}
+		
+		newCube_URI+="_"+rnd+">";		
+		List<Literal> originalCubeLabels=
+				CubeSPARQL.getLabels(originalCubeURI, originalCubeGraph, SPARQLservice);		
 
 		// Add new DSD
 		String create_new_dsd_query = "PREFIX qb: <http://purl.org/linked-data/cube#>"
 				+ "PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>"
+				+ "PREFIX opencube: <http://opencube-project.eu/>"
 				+ "INSERT DATA  {";
 
 		if (SPARQLservice != null) {
@@ -358,8 +437,7 @@ public class AggregationSPARQL {
 		// Add dimensions to DSD
 		for (LDResource ldr : dimensions) {
 			rnd = Math.abs(rand.nextLong());
-			String newComponentSpecification_URI = "<http://www.fluidops.com/resource/componentSpecification_"
-					+ rnd + ">";
+			String newComponentSpecification_URI = "<http://opencube-project.eu/componentSpecification_"+ rnd + ">";
 			create_new_dsd_query += newDSD_URI + " qb:component "
 					+ newComponentSpecification_URI + "."
 					+ newComponentSpecification_URI + " qb:dimension <"
@@ -369,14 +447,14 @@ public class AggregationSPARQL {
 		// Add measures to DSD
 		for (LDResource m : measures) {
 			rnd = Math.abs(rand.nextLong());
-			String newComponentSpecification_URI = "<http://www.fluidops.com/resource/componentSpecification_"
+			String newComponentSpecification_URI = "<http://opencube-project.eu/componentSpecification_"
 					+ rnd + ">";
 			create_new_dsd_query += newDSD_URI + " qb:component "+ newComponentSpecification_URI + "."
 					+ newComponentSpecification_URI + " qb:measure <" + m.getURI()+ ">.";
 		}
-
+		
 		// Attach Cube to Aggregation Set
-		create_new_dsd_query += newCube_URI + " qb:aggregationSet "
+		create_new_dsd_query += newCube_URI + " opencube:aggregationSet "
 				+ aggregationSetURI + " .} ";
 
 		if (DSDgraph != null) {
@@ -392,6 +470,7 @@ public class AggregationSPARQL {
 		// Create new cube
 		String create_new_cube_query = "PREFIX qb: <http://purl.org/linked-data/cube#>"
 				+ "PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>"
+				+ "PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>"
 				+ "INSERT DATA  {";
 
 		if (SPARQLservice != null) {
@@ -401,6 +480,15 @@ public class AggregationSPARQL {
 		create_new_cube_query += "GRAPH " + newCubeGraph_URI + " {"
 				+ newCube_URI + " rdf:type qb:DataSet." + newCube_URI
 				+ " qb:structure " + newDSD_URI + ".";
+				
+		for(Literal l:originalCubeLabels){
+			create_new_cube_query+=newCube_URI+ " rdfs:label \""+l.getLabel()+"\"";			
+			//The lang should be only 2 letters to be valid
+			if(l.getLanguage()!=null&&l.getLanguage().length()==2){
+				create_new_cube_query+="@"+l.getLanguage();
+			}	
+			create_new_cube_query+=".";
+		}
 
 		// Query to get aggregated observations
 		String aggregated_observations_query = "PREFIX qb: <http://purl.org/linked-data/cube#>"
@@ -418,7 +506,9 @@ public class AggregationSPARQL {
 		// Add measures to query
 		i=1;
 		for (LDResource m : measures) {
-			aggregated_observations_query += "(sum(xsd:decimal(?measure"+i+"))as ?aggregatedMeasure"+i+") ";//where{";
+			aggregated_observations_query += "("
+					+ mapMeasureOperation.get(m).getSelectedAsString().get(0)
+					+"(xsd:decimal(?measure"+i+"))as ?aggregatedMeasure"+i+") ";//where{";
 			i++;
 		}
 		aggregated_observations_query+="where{";
@@ -429,12 +519,10 @@ public class AggregationSPARQL {
 		}
 
 		if (originalCubeGraph != null) {
-			aggregated_observations_query += "GRAPH <" + originalCubeGraph
-					+ "> {";
+			aggregated_observations_query += "GRAPH <" + originalCubeGraph+ "> {";
 		}
 
-		aggregated_observations_query += "?obs qb:dataSet " + originalCubeURI
-				+ ".";
+		aggregated_observations_query += "?obs qb:dataSet " + originalCubeURI+ ".";
 
 		i = 1;
 		for (LDResource ldr : dimensions) {
@@ -468,30 +556,42 @@ public class AggregationSPARQL {
 			aggregated_observations_query += "}";
 		}
 	
-						
-		// If a cube graph is defined
-		if (DSDgraph != null) {
-			aggregated_observations_query += "GRAPH <" + DSDgraph + "> {";
-		}	
-				
-		//if there is a dimension not used that has levels
-		//then aggregate only observations of the same level
-		i=1;
+		boolean foundLevels=false;
 		for(LDResource ldr:notUsedDimensions){
 			List<LDResource> dimLevels=dimensionsLevelsFromSchema.get(ldr);			
 			if(dimLevels.size()>0){
-				aggregated_observations_query += "<"+dimLevels.get(0).getURI()+"> skos:member ?levelvalue"+ i+".";
-				i++;
+				foundLevels=true;
+				break;
 			}
 		}
-				
-		aggregated_observations_query+="}";
-		// If a cube DSD graph is defined
-		if (DSDgraph != null) {
-			aggregated_observations_query += "}";
+		
+		//if there is a dimension not used that has levels
+		if(foundLevels){
+						
+			// If a cube graph is defined
+			if (DSDgraph != null) {
+				aggregated_observations_query += "GRAPH <" + DSDgraph + "> {";
+			}	
+			//if there is a dimension not used that has levels
+			//then aggregate only observations of the same level
+			i=1;
+			for(LDResource ldr:notUsedDimensions){
+				List<LDResource> dimLevels=dimensionsLevelsFromSchema.get(ldr);			
+				if(dimLevels.size()>0){
+					aggregated_observations_query += "<"+dimLevels.get(0).getURI()+"> skos:member ?levelvalue"+ i+".";
+					i++;
+				}
+			}					
+			
+			// If a cube DSD graph is defined
+			if (DSDgraph != null) {
+				aggregated_observations_query += "}";
+			}
+		
 		}
 
-				
+		aggregated_observations_query+="}";
+		
 		if (SPARQLservice != null) {
 			aggregated_observations_query += "}";
 		}
@@ -525,7 +625,7 @@ public class AggregationSPARQL {
 				rnd = Math.abs(rand.nextLong());
 
 				// Observation URI
-				String newObservation_URI = "<http://www.fluidops.com/resource/observation_"+ rnd + ">";
+				String newObservation_URI = "<http://opencube-project.eu/observation_"+ rnd + ">";
 				create_new_cube_query += newObservation_URI
 						+ " rdf:type qb:Observation." + newObservation_URI
 						+ " qb:dataSet " + newCube_URI + ".";
@@ -537,7 +637,6 @@ public class AggregationSPARQL {
 					if (dimValue.contains("http")) {
 						create_new_cube_query += newObservation_URI + " <"
 								+ ldr.getURI() + "> <" + dimValue + ">.";
-
 					// Is literal
 					} else {
 						create_new_cube_query += newObservation_URI + " <"
@@ -553,15 +652,13 @@ public class AggregationSPARQL {
 					if (measure.contains("http")) {
 						create_new_cube_query += newObservation_URI + " <"
 								+ m.getURI() + "> <" + measure + ">.";
-
 					// Is literal
 					} else {
 						create_new_cube_query += newObservation_URI + " <"
 								+ m.getURI() + "> \"" + measure + "\".";
 					}
 					i++;
-				}
-			
+				}			
 
 				// If |observations|= 100 execute insert
 				if (count == 100) {
@@ -587,9 +684,7 @@ public class AggregationSPARQL {
 				} else {
 					count++;
 				}
-
 			}
-
 		} catch (QueryEvaluationException e) {
 			e.printStackTrace();
 		}
@@ -607,18 +702,19 @@ public class AggregationSPARQL {
 		}
 
 		return newCube_URI;
-	}
+	}	
 	
-		// TO DO: DO SOMETHONG WITH THE RANDOM. CHECK IF EXIST? OR FOR OBSERVATIONS
-		// START FROM 1...N
-		public static void createRollUpAggregation(LDResource rollUpDimension,
+	
+	// TO DO: DO SOMETHONG WITH THE RANDOM. CHECK IF EXIST? OR FOR OBSERVATIONS
+	// START FROM 1...N
+	public static void createRollUpAggregation(List<LDResource> rollUpDimensions,
 				List<LDResource> dimensions, List<LDResource> measures,
 				String originalCubeURI, String originalCubeGraph, String DSDgraph,
-				String SPARQLservice) {
-		
+				String SPARQLservice, HashMap<LDResource, FComboBox> mapMeasureOperation) {
+				
 			//remove the rollup dimension
 			List<LDResource> dimensionsWithoutRollUp=new ArrayList<LDResource>(dimensions);
-			dimensionsWithoutRollUp.remove(rollUpDimension);
+			dimensionsWithoutRollUp.removeAll(rollUpDimensions);
 
 			// Create new cube
 			String create_new_cube_query = "PREFIX qb: <http://purl.org/linked-data/cube#>"
@@ -636,6 +732,7 @@ public class AggregationSPARQL {
 			String aggregated_observations_query = "PREFIX qb: <http://purl.org/linked-data/cube#>"
 					+ "PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>"
 					+ "PREFIX xkos: <http://rdf-vocabulary.ddialliance.org/xkos#>"
+					+ "PREFIX skos: <http://www.w3.org/2004/02/skos/core#> "
 					+ "Select ";
 			int i = 1;
 
@@ -645,13 +742,21 @@ public class AggregationSPARQL {
 				i++;
 			}
 			
-			//add the rollup dimension
-			aggregated_observations_query+="?rollupnew ";
+			i=1;
+			// Add dimension variables to query
+			for (LDResource ldr : rollUpDimensions) {
+				aggregated_observations_query += "?rollupnew" + i + " ";
+				i++;
+			}	
 
 			// Add measures to query
 			i=1;
 			for (LDResource m : measures) {
-				aggregated_observations_query += "(sum(xsd:decimal(?measure"+i+"))as ?aggregatedMeasure"+i+") ";//where{";
+				
+				//Different operation for each measure
+				aggregated_observations_query += "("
+						+ mapMeasureOperation.get(m).getSelectedAsString().get(0)
+						+"(xsd:decimal(?measure"+i+"))as ?aggregatedMeasure"+i+") ";//where{";
 				i++;
 			}
 			aggregated_observations_query+="where{";
@@ -672,9 +777,38 @@ public class AggregationSPARQL {
 				i++;
 			}
 			
-			aggregated_observations_query+="?obs <"+rollUpDimension.getURI()+"> ?rollupvalue." +
-					"?rollupvalue xkos:isPartOf+ ?rollupnew.";
-
+			i = 1;
+			for (LDResource ldr : rollUpDimensions) {
+				aggregated_observations_query+="?obs <"+ldr.getURI()+"> ?rollupvalue"+i+".";
+				i++;
+			}
+			
+			i=1;
+			if(rollUpDimensions.size()==1){
+				aggregated_observations_query+="?rollupvalue"+i+" (skos:broader|xkos:isPartOf)+ ?rollupnew"+i+".";
+			}else{			
+				aggregated_observations_query+="{";				
+				for (int j=1;j<=rollUpDimensions.size();j++) {
+					aggregated_observations_query+="{";
+					for (int k=1;k<=rollUpDimensions.size();k++) {
+						if(j==k){
+							aggregated_observations_query+="?rollupvalue"+k+" (skos:broader|xkos:isPartOf)+ ?rollupnew"+k+".";
+						}else{
+							aggregated_observations_query+="?rollupvalue"+k+" (skos:broader|xkos:isPartOf)* ?rollupnew"+k+".";
+						}
+					}
+					aggregated_observations_query+="}UNION";
+				}
+				
+			
+				int index = aggregated_observations_query.lastIndexOf("UNION");
+				if(index != -1) {
+					aggregated_observations_query = aggregated_observations_query.substring(0,index);
+				}	
+				aggregated_observations_query+="}";	
+				
+			}			
+		
 			i=1;
 			for (LDResource m : measures) {
 				aggregated_observations_query += "?obs <" + m.getURI() + "> ?measure"+ i + ".";
@@ -700,8 +834,12 @@ public class AggregationSPARQL {
 				i++;
 			}
 			
-			aggregated_observations_query+=" ?rollupnew";
-
+			i = 1;
+			for (LDResource ldr : rollUpDimensions) {
+				aggregated_observations_query += " ?rollupnew" + i;
+				i++;
+			}	
+		
 			TupleQueryResult res = QueryExecutor.executeSelect(aggregated_observations_query);
 
 			int count = 0;
@@ -717,19 +855,32 @@ public class AggregationSPARQL {
 				// Create new observations for the new aggregated cube.
 				// Insert observations in sets of 100
 				for (BindingSet bindingSet : bs) {
-
 					// create random observation
 					Random rand = new Random();
 					long rnd = Math.abs(rand.nextLong());
-
 					// Observation URI
-					String newObservation_URI = "<http://www.fluidops.com/resource/observation_"+ rnd + ">";
+					String newObservation_URI = "<http://opencube-project.eu/observation_"+ rnd + ">";
 					create_new_cube_query += newObservation_URI
 							+ " rdf:type qb:Observation." + newObservation_URI
 							+ " qb:dataSet " + originalCubeURI + ".";
 					i = 1;
 					for (LDResource ldr : dimensionsWithoutRollUp) {
 						String dimValue = bindingSet.getValue("dim" + i).stringValue();
+						// Is URI
+						if (dimValue.contains("http")) {
+							create_new_cube_query += newObservation_URI + " <"
+									+ ldr.getURI() + "> <" + dimValue + ">.";
+						// Is literal
+						} else {
+							create_new_cube_query += newObservation_URI + " <"
+									+ ldr.getURI() + "> \"" + dimValue + "\".";
+						}
+						i++;
+					}					
+					
+					i = 1;
+					for (LDResource ldr : rollUpDimensions) {
+						String dimValue = bindingSet.getValue("rollupnew" + i).stringValue();
 						// Is URI
 						if (dimValue.contains("http")) {
 							create_new_cube_query += newObservation_URI + " <"
@@ -741,21 +892,7 @@ public class AggregationSPARQL {
 									+ ldr.getURI() + "> \"" + dimValue + "\".";
 						}
 						i++;
-					}
-					
-					//add rollup dim to new observations
-					String dimValue = bindingSet.getValue("rollupnew").stringValue();
-					// Is URI
-					if (dimValue.contains("http")) {
-						create_new_cube_query += newObservation_URI + " <"
-								+ rollUpDimension.getURI() + "> <" + dimValue + ">.";
-
-					// Is literal
-					} else {
-						create_new_cube_query += newObservation_URI + " <"
-								+ rollUpDimension.getURI() + "> \"" + dimValue + "\".";
-					}
-
+					}					
 					
 					i=1;
 					//add measures to new aggregated measures to new observation
@@ -772,8 +909,7 @@ public class AggregationSPARQL {
 									+ m.getURI() + "> \"" + measure + "\".";
 						}
 						i++;
-					}
-				
+					}				
 
 					// If |observations|= 100 execute insert
 					if (count == 100) {
@@ -807,9 +943,7 @@ public class AggregationSPARQL {
 
 			// If there are observations not yet inserted
 			if (count > 0) {
-
 				create_new_cube_query += "}}";
-
 				if (SPARQLservice != null) {
 					create_new_cube_query += "}";
 				}
@@ -817,5 +951,4 @@ public class AggregationSPARQL {
 
 			}	
 		}
-
 }

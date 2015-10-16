@@ -8,6 +8,7 @@ public class LDResource implements Comparable {
 	private String URI;
 //	private String label;
 	private Literal labelLiteral;
+	private String level;
 	
 	public LDResource() {
 		super();
@@ -39,6 +40,14 @@ public class LDResource implements Comparable {
 		URI = uRI;
 	}
 
+	public String getLevel() {
+		return level;
+	}
+
+	public void setLevel(String level) {
+		 this.level= level;
+	}
+	
 	public String getLabel() {
 		if(labelLiteral!=null){
 			return labelLiteral.getLabel();

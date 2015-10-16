@@ -210,13 +210,10 @@ public class SliceCreator extends AbstractWidget<SliceCreator.Config> {
 						dim.getURIorLabel()) {
 
 					public void onClick() {
-
 						fixedDimensions.clear();
-
 						// Detect user selected fixed dimensions
 						for (LDResource dim : mapDimURIcheckBox.keySet()) {
 							FCheckBox check = mapDimURIcheckBox.get(dim);
-
 							// Get selected fixed dimensions
 							if (check.checked) {
 								fixedDimensions.add(dim);
@@ -333,29 +330,21 @@ public class SliceCreator extends AbstractWidget<SliceCreator.Config> {
 					+ "</b> is not a valid cube +URI.";
 			FLabel invalidURI_label = new FLabel("invalidURI", message);
 			cnt.add(invalidURI_label);
-
-		}
-				
+		}				
 		return cnt;
-
 	}
 
 	// Add labels and combo boxed for the fixed cube dimensions
 	private void addFixedDimensions() {
-
 		rightcontainer.addAndRefresh(getNewLineComponent(true));
-
 		dimensionURIfcomponents.clear();
 		// Add a Label - Combo box for each fixed cube dimension
 		for (LDResource fDim : fixedDimensions) {
-
 			List<FComponent> dimComponents = new ArrayList<FComponent>();
-
 			// Add the label for the fixed cube dimension
 			FLabel fDimLabel = new FLabel(fDim.getURIorLabel() + "_label",
 					"<b>" + fDim.getURIorLabel() + "</b>");
 			dimComponents.add(fDimLabel);
-
 			rightcontainer.addAndRefresh(fDimLabel);
 
 			// IWB does not support too long IDs
@@ -375,13 +364,9 @@ public class SliceCreator extends AbstractWidget<SliceCreator.Config> {
 
 			// Combo box pre-selected value
 			fDimCombo.setPreSelected(fixedDimensionsSelectedValues.get(fDim).getURI());
-
 			dimComponents.add(fDimCombo);
-
 			rightcontainer.addAndRefresh(fDimCombo);
-
 			rightcontainer.addAndRefresh(getNewLineComponent(true));
-
 			dimensionURIfcomponents.put(fDim, dimComponents);
 		}
 

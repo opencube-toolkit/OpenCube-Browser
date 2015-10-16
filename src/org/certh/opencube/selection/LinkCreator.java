@@ -1,5 +1,9 @@
 package org.certh.opencube.selection;
 
+import java.io.BufferedWriter;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.io.PrintWriter;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -35,8 +39,9 @@ import com.fluidops.iwb.widget.config.WidgetBaseConfig;
  * 
  */
 
-@TypeConfigDoc("The OpenCube Cube Selection enables the selection of cube dimensions and"
-		+ "measures to visualize.")
+@TypeConfigDoc("The OpenCube Cube Compatibility Explorer identifies" +
+		" compatible cubes for potential merge and establishes typed links to " +
+		"facilitate discovery.")
 public class LinkCreator extends AbstractWidget<LinkCreator.Config> {
 
 	// The SPARQL service to get data (not required)
@@ -171,14 +176,125 @@ public class LinkCreator extends AbstractWidget<LinkCreator.Config> {
 			cnt.add(getNewLineComponent());
 
 			FButton createLinks_button = new FButton("createLinks_button",
-					"Create links") {
+					"Create links for all cubes") {
 				@Override
 				public void onClick() {
 
 					// populate cubes combo box
 					for (LDResource cube : allCubesAndDimCount.keySet()) {
-					selectedCube=cube;
-					selectedCubeURI = "<" + cube.getURI() + ">";
+						selectedCube=cube;
+						selectedCubeURI = "<" + cube.getURI() + ">";
+						// Get Cube/Slice Graph
+						cubeGraph = CubeSPARQL.getCubeSliceGraph(selectedCubeURI,
+								SPARQL_Service);
+	
+						// Get Cube Structure graph
+						cubeDSDGraph = CubeSPARQL.getCubeStructureGraph(
+								selectedCubeURI, cubeGraph, SPARQL_Service);
+	
+						// Thread to get Measures
+						Thread dimsThread = new Thread(new Runnable() {
+							public void run() {
+								// Get all Cube dimensions
+								cubeDimensions = CubeSPARQL.getDataCubeDimensions(
+										selectedCubeURI, cubeGraph, cubeDSDGraph,
+										selectedLanguage, defaultLang, ignoreLang,
+										SPARQL_Service);
+							}
+						});
+	
+						// Thread to get Measures
+						Thread measuresThread = new Thread(new Runnable() {
+							public void run() {
+								// Get the Cube measure
+								cubeMeasures = CubeSPARQL.getDataCubeMeasure(
+										selectedCubeURI, cubeGraph, cubeDSDGraph,
+										selectedLanguage, defaultLang, ignoreLang,
+										SPARQL_Service);
+							}
+						});
+	
+						// start thread
+						dimsThread.start();
+						measuresThread.start();
+	
+						// wait until thread finish
+						try {
+							dimsThread.join();
+							measuresThread.join();
+						} catch (InterruptedException e1) {
+							e1.printStackTrace();
+						}
+	
+						// Thread to get dimension levels
+						Thread dimLevelsThread = new Thread(new Runnable() {
+							public void run() {
+								dimensionsLevels = CubeHandlingUtils
+										.getDimensionsLevels(selectedCubeURI,
+												cubeDimensions, cubeDSDGraph,
+												cubeGraph, selectedLanguage,
+												defaultLang, ignoreLang,
+												SPARQL_Service);
+							}
+						});
+	
+						// Thread to get dimension concept schemes
+						Thread dimConceptSchemesThread = new Thread(new Runnable() {
+							public void run() {
+								dimensionsConceptSchemes = CubeHandlingUtils
+										.getDimensionsConceptSchemes(
+												cubeDimensions, cubeDSDGraph,
+												selectedLanguage, defaultLang,
+												ignoreLang, SPARQL_Service);
+							}
+						});
+	
+						// Start threads
+						dimLevelsThread.start();
+						dimConceptSchemesThread.start();
+	
+						// wait until thread finished
+						try {
+							dimLevelsThread.join();
+							dimConceptSchemesThread.join();
+						} catch (InterruptedException e) {
+							e.printStackTrace();
+						}
+						int numberOfLinksAddValueToLevel = 0;
+	
+						// Create add value to level links
+						for (LDResource selectedDim : cubeDimensions) {
+							numberOfLinksAddValueToLevel += SelectionSPARQL
+									.linkAddValueToLevelCompatibleCubesAndLevels(
+											selectedCube, cubeGraph, cubeDSDGraph,
+											allCubesAndDimCount, cubeDimensions,
+											dimensionsLevels, cubeMeasures,
+											dimensionsConceptSchemes, selectedDim,
+											1.0, selectedLanguage, defaultLang,
+											ignoreLang, SPARQL_Service);
+						}
+	
+						// Create add measure links
+						int numberOfLinksAddMeasure = SelectionSPARQL
+								.linkMeasureCompatibleCubesAndLevels(selectedCube,
+										cubeGraph, cubeDSDGraph,
+										allCubesAndDimCount, cubeDimensions,
+										dimensionsLevels, dimensionsConceptSchemes,
+										cubeMeasures, 1.0, selectedLanguage,
+										defaultLang, ignoreLang, SPARQL_Service);
+					}
+					FDialog.showMessage(this.getPage(),	"Links created","Links have been created! ","ok");
+				}
+
+			};
+			
+			
+			FButton createSingleCubeLinks_button = new FButton("createSingleCubeLinks_button",
+					"Create links for selectd cube") {
+				@Override
+				public void onClick() {
+					
+					selectedCubeURI = "<" + selectedCube.getURI() + ">";
 					// Get Cube/Slice Graph
 					cubeGraph = CubeSPARQL.getCubeSliceGraph(selectedCubeURI,
 							SPARQL_Service);
@@ -260,7 +376,7 @@ public class LinkCreator extends AbstractWidget<LinkCreator.Config> {
 					// Create add value to level links
 					for (LDResource selectedDim : cubeDimensions) {
 						numberOfLinksAddValueToLevel += SelectionSPARQL
-								.linkAddValueToLevelCompatibleCubes(
+								.linkAddValueToLevelCompatibleCubesAndLevels(
 										selectedCube, cubeGraph, cubeDSDGraph,
 										allCubesAndDimCount, cubeDimensions,
 										dimensionsLevels, cubeMeasures,
@@ -271,34 +387,27 @@ public class LinkCreator extends AbstractWidget<LinkCreator.Config> {
 
 					// Create add measure links
 					int numberOfLinksAddMeasure = SelectionSPARQL
-							.linkMeasureCompatibleCubes(selectedCube,
+							.linkMeasureCompatibleCubesAndLevels(selectedCube,
 									cubeGraph, cubeDSDGraph,
 									allCubesAndDimCount, cubeDimensions,
 									dimensionsLevels, dimensionsConceptSchemes,
 									cubeMeasures, 1.0, selectedLanguage,
 									defaultLang, ignoreLang, SPARQL_Service);
-					
-					System.out.println("Links have been created for cube "
-							+ selectedCube.getURI()	+ ". Add value to level links: "
-							+ numberOfLinksAddValueToLevel
-							+ ". Add measure links: "
-							+ numberOfLinksAddMeasure + ".");
-					}
+									
 					FDialog.showMessage(
 							this.getPage(),
 							"Links created",
 							"Links have been created for cube "
 									+ selectedCube.getURI()
 									+ ". Add value to level links: "
-						//			+ numberOfLinksAddValueToLevel
+									+ numberOfLinksAddValueToLevel
 									+ ". Add measure links: "
-								//	+ numberOfLinksAddMeasure + "."
+									+ numberOfLinksAddMeasure + "."
 									,"ok");
 				}
-
 			};
-
 			cnt.add(createLinks_button);
+			cnt.add(createSingleCubeLinks_button);
 
 		} else {
 			FLabel noAvailableCubes_label = new FLabel(
